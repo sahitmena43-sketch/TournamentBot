@@ -18,10 +18,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class TournamentBot extends ListenerAdapter {
     
-    // ✅ TOKENI MERRET NGA VARIABLAT E MJEDISIT (JO NGA KODI!)
     private static final String TOKEN = System.getenv("BOT_TOKEN") != null 
         ? System.getenv("BOT_TOKEN") 
         : "YOUR_BOT_TOKEN_HERE";
+    
+    private static JDA jdaInstance;  // ✅ Referenca për JDA
     
     private static final Map<String, Tournament> tournaments = new ConcurrentHashMap<>();
     private static final Map<String, UserState> userStates = new ConcurrentHashMap<>();
@@ -31,13 +32,14 @@ public class TournamentBot extends ListenerAdapter {
         try {
             startHealthServer();
             
-            JDA jda = JDABuilder.createDefault(TOKEN)
+            jdaInstance = JDABuilder.createDefault(TOKEN)
                     .enableIntents(
                         GatewayIntent.GUILD_MESSAGES,
                         GatewayIntent.MESSAGE_CONTENT,
                         GatewayIntent.GUILD_MEMBERS
                     )
                     .addEventListeners(new TournamentBot())
+                    .addEventListeners(new MessageListener())  // ✅ REGJISTRUAR!
                     .build();
                     
             System.out.println("========================================");
@@ -430,7 +432,7 @@ public class TournamentBot extends ListenerAdapter {
             state.setTournamentName(message);
             state.setStep("tournament_game");
             
-            String msg = "Name: " + message + "\n\nChoose game (type number):\n1 - Free Fire\n2 - Dream League Soccer 2026\n3 - FC Mobile\n4 - Other (type name)";
+            String msg = "✅ Name: " + message + "\n\nChoose game (type number):\n1 - Free Fire\n2 - Dream League Soccer 2026\n3 - FC Mobile\n4 - Other (type name)";
             sendMessage(channelId, msg);
         }
         else if (step.equals("tournament_game")) {
@@ -442,13 +444,13 @@ public class TournamentBot extends ListenerAdapter {
             state.setTournamentGame(game);
             state.setStep("tournament_players");
             
-            sendMessage(channelId, "Game: " + game + "\n\nHow many players? (2-16):");
+            sendMessage(channelId, "✅ Game: " + game + "\n\nHow many players? (2-16):");
         }
         else if (step.equals("tournament_players")) {
             try {
                 int max = Integer.parseInt(message);
                 if (max < 2 || max > 16) {
-                    sendMessage(channelId, "Number must be 2-16. Try again:");
+                    sendMessage(channelId, "❌ Number must be 2-16. Try again:");
                     return;
                 }
                 
@@ -464,11 +466,11 @@ public class TournamentBot extends ListenerAdapter {
                 tournaments.put(tournamentId, t);
                 userStates.remove(key);
                 
-                sendMessage(channelId, "Tournament created!\n\nName: " + t.getName() + 
+                sendMessage(channelId, "✅ Tournament created!\n\nName: " + t.getName() + 
                            "\nGame: " + t.getGame() + "\nPlayers: 1/" + max + 
                            "\nAdmin: <@" + state.getUserId() + ">\n\nUse /join to invite players\nUse /starttournament to start");
             } catch (NumberFormatException e) {
-                sendMessage(channelId, "Enter a number (2-16):");
+                sendMessage(channelId, "❌ Enter a number (2-16):");
             }
         }
         else if (step.equals("join_tournament")) {
@@ -481,7 +483,7 @@ public class TournamentBot extends ListenerAdapter {
                     Tournament t = tournaments.get(tournamentId);
                     
                     if (t.getPlayers().size() >= t.getMaxPlayers()) {
-                        sendMessage(channelId, "Tournament is full!");
+                        sendMessage(channelId, "❌ Tournament is full!");
                         userStates.remove(key);
                         return;
                     }
@@ -489,18 +491,27 @@ public class TournamentBot extends ListenerAdapter {
                     t.addPlayer(userId, "Player_" + userId);
                     userStates.remove(key);
                     
-                    sendMessage(channelId, "You joined!\n\nTournament: " + t.getName() + 
+                    sendMessage(channelId, "✅ You joined!\n\nTournament: " + t.getName() + 
                                "\nPlayers: " + t.getPlayers().size() + "/" + t.getMaxPlayers());
                 } else {
-                    sendMessage(channelId, "Invalid number. Try again:");
+                    sendMessage(channelId, "❌ Invalid number. Try again:");
                 }
             } catch (NumberFormatException e) {
-                sendMessage(channelId, "Enter a number:");
+                sendMessage(channelId, "❌ Enter a number:");
             }
         }
     }
     
     private static void sendMessage(String channelId, String message) {
+        if (jdaInstance != null) {
+            try {
+                jdaInstance.getTextChannelById(channelId)
+                    .sendMessage(message)
+                    .queue();
+            } catch (Exception e) {
+                System.err.println("Error sending message: " + e.getMessage());
+            }
+        }
         System.out.println("Message to channel " + channelId + ": " + message);
     }
 }

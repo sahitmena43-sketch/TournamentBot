@@ -28,8 +28,8 @@ public class TournamentBot extends ListenerAdapter {
     private static final Map<String, UserState> userStates = new ConcurrentHashMap<>();
     private static long tournamentCounter = 0;
     
-    // ✅ Kontroll i rreptë për regjistrim
-    private static boolean globalCommandsRegistered = false;
+    // ✅ Kontroll për të siguruar që komandat regjistrohen VETËM NJË HERË
+    private static boolean commandsRegistered = false;
     
     public static void main(String[] args) {
         try {
@@ -83,9 +83,9 @@ public class TournamentBot extends ListenerAdapter {
     @Override
     public void onReady(ReadyEvent event) {
         // ✅ Regjistro komandat VETËM NJË HERË dhe VETËM GLOBALISHT
-        if (!globalCommandsRegistered) {
+        if (!commandsRegistered) {
             registerGlobalCommands(event.getJDA());
-            globalCommandsRegistered = true;
+            commandsRegistered = true;
             System.out.println("✅ Global commands registered successfully!");
             System.out.println("========================================");
         }
@@ -94,6 +94,7 @@ public class TournamentBot extends ListenerAdapter {
     /**
      * ✅ Regjistron komandat VETËM GLOBALISHT
      * Kjo është E VETMJA metodë që regjistron komandat
+     * NUK regjistrohen komanda për servera specifikë!
      */
     private void registerGlobalCommands(JDA jda) {
         List<SlashCommandData> commands = new ArrayList<>();
@@ -118,13 +119,10 @@ public class TournamentBot extends ListenerAdapter {
                 .addOption(OptionType.INTEGER, "score2", "Player 2 score", true));
         commands.add(Commands.slash("deletetournament", "Delete tournament (Server Admins only)"));
         
-        // ✅ Regjistro VETËM NJË HERË - GLOBALISHT
+        // ✅ Regjistro VETËM GLOBALISHT
         jda.updateCommands().addCommands(commands).queue(
-            success -> {
-                System.out.println("✅ Global commands registered successfully!");
-                System.out.println("   Total commands: " + commands.size());
-            },
-            error -> System.err.println("❌ Error registering global commands: " + error.getMessage())
+            success -> System.out.println("✅ " + commands.size() + " global commands registered!"),
+            error -> System.err.println("❌ Error: " + error.getMessage())
         );
     }
     

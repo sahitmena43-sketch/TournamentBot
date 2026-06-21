@@ -18,11 +18,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class TournamentBot extends ListenerAdapter {
     
+    // Token-i merret nga variablat e mjedisit (Railway Variables)
     private static final String TOKEN = System.getenv("BOT_TOKEN") != null 
         ? System.getenv("BOT_TOKEN") 
         : "YOUR_BOT_TOKEN_HERE";
     
-    private static JDA jdaInstance;  // ✅ Referenca për JDA
+    private static JDA jdaInstance;
     
     private static final Map<String, Tournament> tournaments = new ConcurrentHashMap<>();
     private static final Map<String, UserState> userStates = new ConcurrentHashMap<>();
@@ -39,7 +40,7 @@ public class TournamentBot extends ListenerAdapter {
                         GatewayIntent.GUILD_MEMBERS
                     )
                     .addEventListeners(new TournamentBot())
-                    .addEventListeners(new MessageListener())  // ✅ REGJISTRUAR!
+                    .addEventListeners(new MessageListener())
                     .build();
                     
             System.out.println("========================================");
@@ -79,14 +80,58 @@ public class TournamentBot extends ListenerAdapter {
     
     @Override
     public void onReady(ReadyEvent event) {
+        // ✅ REGJISTRO KOMANDAT GLOBALE (PUNOJNË NË TË GJITHË SERVERAT)
+        registerGlobalCommands(event.getJDA());
+        
+        // Gjithashtu regjistro për serverat ekzistues (për përshpejtim)
         for (Guild guild : event.getJDA().getGuilds()) {
-            registerSlashCommands(guild);
+            registerServerCommands(guild);
         }
-        System.out.println("Slash commands registered on " + event.getJDA().getGuilds().size() + " servers!");
+        
+        System.out.println("✅ Global commands registered successfully!");
+        System.out.println("✅ Server commands registered on " + event.getJDA().getGuilds().size() + " servers!");
         System.out.println("========================================");
     }
     
-    private void registerSlashCommands(Guild guild) {
+    /**
+     * Regjistron komandat GLOBALISHT - shfaqen në të gjithë serverat
+     * Vonesë: deri në 1 orë
+     */
+    private void registerGlobalCommands(JDA jda) {
+        List<SlashCommandData> commands = new ArrayList<>();
+        
+        // Komandat publike
+        commands.add(Commands.slash("help", "Show all available commands"));
+        commands.add(Commands.slash("join", "Join an existing tournament"));
+        commands.add(Commands.slash("list", "Show all active tournaments"));
+        commands.add(Commands.slash("bracket", "Show tournament bracket"));
+        commands.add(Commands.slash("results", "Show tournament results"));
+        commands.add(Commands.slash("info", "Show tournament information"));
+        commands.add(Commands.slash("leave", "Leave the tournament"));
+        
+        // Komandat admin
+        commands.add(Commands.slash("newtournament", "Create a new tournament (Server Admins only)"));
+        commands.add(Commands.slash("starttournament", "Start the tournament (Tournament Admin only)"));
+        commands.add(Commands.slash("addplayer", "Add a player (Tournament Admin only)")
+                .addOption(OptionType.USER, "user", "Player to add", true));
+        commands.add(Commands.slash("setscore", "Set match score (Tournament Admin only)")
+                .addOption(OptionType.INTEGER, "match_id", "Match ID", true)
+                .addOption(OptionType.INTEGER, "score1", "Player 1 score", true)
+                .addOption(OptionType.INTEGER, "score2", "Player 2 score", true));
+        commands.add(Commands.slash("deletetournament", "Delete tournament (Server Admins only)"));
+        
+        // Regjistro komandat globalisht
+        jda.updateCommands().addCommands(commands).queue(
+            success -> System.out.println("✅ Global commands registered successfully!"),
+            error -> System.err.println("❌ Error registering global commands: " + error.getMessage())
+        );
+    }
+    
+    /**
+     * Regjistron komandat VETËM PËR NJË SERVER - shfaqen menjëherë
+     * Përdoret për serverat ku bot-i është aktualisht
+     */
+    private void registerServerCommands(Guild guild) {
         List<SlashCommandData> commands = new ArrayList<>();
         
         commands.add(Commands.slash("help", "Show all available commands"));
@@ -96,7 +141,6 @@ public class TournamentBot extends ListenerAdapter {
         commands.add(Commands.slash("results", "Show tournament results"));
         commands.add(Commands.slash("info", "Show tournament information"));
         commands.add(Commands.slash("leave", "Leave the tournament"));
-        
         commands.add(Commands.slash("newtournament", "Create a new tournament (Server Admins only)"));
         commands.add(Commands.slash("starttournament", "Start the tournament (Tournament Admin only)"));
         commands.add(Commands.slash("addplayer", "Add a player (Tournament Admin only)")
@@ -108,8 +152,8 @@ public class TournamentBot extends ListenerAdapter {
         commands.add(Commands.slash("deletetournament", "Delete tournament (Server Admins only)"));
         
         guild.updateCommands().addCommands(commands).queue(
-            success -> System.out.println("Commands registered on server: " + guild.getName()),
-            error -> System.err.println("Error registering commands: " + error.getMessage())
+            success -> System.out.println("✅ Server commands registered on: " + guild.getName()),
+            error -> System.err.println("❌ Error registering server commands: " + error.getMessage())
         );
     }
     

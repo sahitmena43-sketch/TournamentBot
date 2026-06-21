@@ -29,6 +29,9 @@ public class TournamentBot extends ListenerAdapter {
     private static final Map<String, UserState> userStates = new ConcurrentHashMap<>();
     private static long tournamentCounter = 0;
     
+    // ✅ Flag për të siguruar që komandat regjistrohen vetëm një herë
+    private static boolean commandsRegistered = false;
+    
     public static void main(String[] args) {
         try {
             startHealthServer();
@@ -80,17 +83,20 @@ public class TournamentBot extends ListenerAdapter {
     
     @Override
     public void onReady(ReadyEvent event) {
-        // ✅ REGJISTRO KOMANDAT GLOBALE (PUNOJNË NË TË GJITHË SERVERAT)
-        registerGlobalCommands(event.getJDA());
-        
-        // Gjithashtu regjistro për serverat ekzistues (për përshpejtim)
-        for (Guild guild : event.getJDA().getGuilds()) {
-            registerServerCommands(guild);
+        // ✅ Regjistro komandat VETËM NJË HERË
+        if (!commandsRegistered) {
+            registerGlobalCommands(event.getJDA());
+            commandsRegistered = true;
+            
+            // Gjithashtu regjistro për serverat ekzistues (për përshpejtim)
+            for (Guild guild : event.getJDA().getGuilds()) {
+                registerServerCommands(guild);
+            }
+            
+            System.out.println("✅ Global commands registered successfully!");
+            System.out.println("✅ Server commands registered on " + event.getJDA().getGuilds().size() + " servers!");
+            System.out.println("========================================");
         }
-        
-        System.out.println("✅ Global commands registered successfully!");
-        System.out.println("✅ Server commands registered on " + event.getJDA().getGuilds().size() + " servers!");
-        System.out.println("========================================");
     }
     
     /**

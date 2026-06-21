@@ -66,28 +66,28 @@ public class Tournament {
         if (brackets.isEmpty()) return "Bracket not generated.";
         
         StringBuilder sb = new StringBuilder();
-        sb.append("Tournament Bracket:\n\n");
+        sb.append("**Tournament Bracket:**\n\n");
         sb.append("Name: ").append(name).append("\n\n");
         
         for (Match m : brackets) {
             sb.append("Match ").append(m.getId()).append(": ");
             
             if (m.isBye()) {
-                sb.append(m.getPlayer1().getUsername()).append(" advances!");
+                sb.append("<@").append(m.getPlayer1().getUserId()).append("> advances!");
             } else if (m.getPlayer2() == null) {
                 sb.append("Waiting for opponent");
             } else if (m.isFinished()) {
-                sb.append(m.getPlayer1().getUsername()).append(" ")
+                sb.append("<@").append(m.getPlayer1().getUserId()).append("> ")
                   .append(m.getScore1()).append(" - ").append(m.getScore2())
-                  .append(" ").append(m.getPlayer2().getUsername());
+                  .append(" <@").append(m.getPlayer2().getUserId()).append(">");
                 if (m.getScore1() > m.getScore2()) {
-                    sb.append(" -> ").append(m.getPlayer1().getUsername()).append(" wins!");
+                    sb.append(" -> <@").append(m.getPlayer1().getUserId()).append("> wins!");
                 } else if (m.getScore2() > m.getScore1()) {
-                    sb.append(" -> ").append(m.getPlayer2().getUsername()).append(" wins!");
+                    sb.append(" -> <@").append(m.getPlayer2().getUserId()).append("> wins!");
                 }
             } else {
-                sb.append(m.getPlayer1().getUsername()).append(" vs ")
-                  .append(m.getPlayer2().getUsername());
+                sb.append("<@").append(m.getPlayer1().getUserId()).append("> vs ")
+                  .append("<@").append(m.getPlayer2().getUserId()).append(">");
             }
             sb.append("\n");
         }
@@ -96,16 +96,16 @@ public class Tournament {
     
     public String getResultsString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("Tournament Results:\n\n");
+        sb.append("**Tournament Results:**\n\n");
         sb.append("Name: ").append(name).append("\n\n");
         
         boolean hasResults = false;
         for (Match m : brackets) {
             if (m.isFinished()) {
                 hasResults = true;
-                sb.append(m.getPlayer1().getUsername()).append(" ")
+                sb.append("<@").append(m.getPlayer1().getUserId()).append("> ")
                   .append(m.getScore1()).append(" - ").append(m.getScore2())
-                  .append(" ").append(m.getPlayer2().getUsername()).append("\n");
+                  .append(" <@").append(m.getPlayer2().getUserId()).append(">\n");
             }
         }
         
@@ -113,13 +113,13 @@ public class Tournament {
             sb.append("No results recorded yet.\n");
         }
         
-        sb.append("\nRankings:\n");
+        sb.append("\n**Rankings:**\n");
         List<Player> sorted = new ArrayList<>(players.values());
         sorted.sort((p1, p2) -> Integer.compare(p2.getWins(), p1.getWins()));
         
         int rank = 1;
         for (Player p : sorted) {
-            sb.append(rank++).append(". ").append(p.getUsername())
+            sb.append(rank++).append(". <@").append(p.getUserId()).append(">")
               .append(" - ").append(p.getWins()).append(" wins");
             if (p.isAdmin()) sb.append(" (Admin)");
             sb.append("\n");
@@ -129,17 +129,17 @@ public class Tournament {
     
     public String getDetailedInfo() {
         StringBuilder sb = new StringBuilder();
-        sb.append("Tournament Information\n\n");
+        sb.append("**Tournament Information**\n\n");
         sb.append("Name: ").append(name).append("\n");
         sb.append("Game: ").append(game).append("\n");
         sb.append("Players: ").append(players.size()).append("/").append(maxPlayers).append("\n");
         sb.append("Status: ").append(status).append("\n");
         sb.append("Admin: <@").append(adminId).append(">\n\n");
         
-        sb.append("Players:\n");
+        sb.append("**Players:**\n");
         int i = 1;
         for (Player p : players.values()) {
-            sb.append(i++).append(". ").append(p.getUsername());
+            sb.append(i++).append(". <@").append(p.getUserId()).append(">");
             if (p.isAdmin()) sb.append(" (Admin)");
             sb.append("\n");
         }

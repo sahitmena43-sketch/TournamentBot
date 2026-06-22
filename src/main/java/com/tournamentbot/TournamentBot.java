@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -28,7 +29,9 @@ public class TournamentBot extends ListenerAdapter {
     private static final Map<String, UserState> userStates = new ConcurrentHashMap<>();
     private static long tournamentCounter = 0;
     
-    // ✅ Kontroll për të siguruar që komandat regjistrohen VETËM NJË HERË
+    // ✅ Roli krijohet dinamikisht nga emri i lojës - LISTA BOSH
+    private static final Map<String, String> GAME_ROLES = new HashMap<>();
+    
     private static boolean commandsRegistered = false;
     
     public static void main(String[] args) {
@@ -48,6 +51,7 @@ public class TournamentBot extends ListenerAdapter {
             System.out.println("========================================");
             System.out.println("Tournament Bot is starting...");
             System.out.println("Bot is active!");
+            System.out.println("Roles will be created dynamically based on game name!");
             System.out.println("========================================");
             
             Thread.currentThread().join();
@@ -82,7 +86,6 @@ public class TournamentBot extends ListenerAdapter {
     
     @Override
     public void onReady(ReadyEvent event) {
-        // ✅ Regjistro komandat VETËM NJË HERË dhe VETËM GLOBALISHT
         if (!commandsRegistered) {
             registerGlobalCommands(event.getJDA());
             commandsRegistered = true;
@@ -91,15 +94,9 @@ public class TournamentBot extends ListenerAdapter {
         }
     }
     
-    /**
-     * ✅ Regjistron komandat VETËM GLOBALISHT
-     * Kjo është E VETMJA metodë që regjistron komandat
-     * NUK regjistrohen komanda për servera specifikë!
-     */
     private void registerGlobalCommands(JDA jda) {
         List<SlashCommandData> commands = new ArrayList<>();
         
-        // Komandat publike
         commands.add(Commands.slash("help", "Show all available commands"));
         commands.add(Commands.slash("join", "Join an existing tournament"));
         commands.add(Commands.slash("list", "Show all active tournaments"));
@@ -108,7 +105,6 @@ public class TournamentBot extends ListenerAdapter {
         commands.add(Commands.slash("info", "Show tournament information"));
         commands.add(Commands.slash("leave", "Leave the tournament"));
         
-        // Komandat admin
         commands.add(Commands.slash("newtournament", "Create a new tournament (Server Admins only)"));
         commands.add(Commands.slash("starttournament", "Start the tournament (Tournament Admin only)"));
         commands.add(Commands.slash("addplayer", "Add a player (Tournament Admin only)")
@@ -119,7 +115,6 @@ public class TournamentBot extends ListenerAdapter {
                 .addOption(OptionType.INTEGER, "score2", "Player 2 score", true));
         commands.add(Commands.slash("deletetournament", "Delete tournament (Server Admins only)"));
         
-        // ✅ Regjistro VETËM GLOBALISHT
         jda.updateCommands().addCommands(commands).queue(
             success -> System.out.println("✅ " + commands.size() + " global commands registered!"),
             error -> System.err.println("❌ Error: " + error.getMessage())
@@ -324,7 +319,11 @@ public class TournamentBot extends ListenerAdapter {
         for (Tournament t : tournaments.values()) {
             if (t.getPlayers().containsKey(userId) && !t.getAdminId().equals(userId)) {
                 t.removePlayer(userId);
-                event.reply("You left the tournament: " + t.getName()).queue();
+                
+                // ✅ Hiq rolin automatik (sipas lojës)
+                removeRoleFromPlayer(event.getGuild().getId(), userId, t.getGame());
+                
+                event.reply("✅ You left the tournament: " + t.getName()).queue();
                 return;
             }
         }
@@ -457,13 +456,13 @@ public class TournamentBot extends ListenerAdapter {
             state.setTournamentGame(game);
             state.setStep("tournament_players");
             
-            sendMessage(channelId, "✅ Game: " + game + "\n\nHow many players? (2-16):");
+            sendMessage(channelId, "✅ Game: " + game + "\n\nHow many players? (Minimum 2):");
         }
         else if (step.equals("tournament_players")) {
             try {
                 int max = Integer.parseInt(message);
-                if (max < 2 || max > 16) {
-                    sendMessage(channelId, "❌ Number must be 2-16. Try again:");
+                if (max < 2) {
+                    sendMessage(channelId, "❌ Number must be at least 2. Try again:");
                     return;
                 }
                 
@@ -483,7 +482,7 @@ public class TournamentBot extends ListenerAdapter {
                            "\nGame: " + t.getGame() + "\nPlayers: 1/" + max + 
                            "\nAdmin: <@" + state.getUserId() + ">\n\nUse /join to invite players\nUse /starttournament to start");
             } catch (NumberFormatException e) {
-                sendMessage(channelId, "❌ Enter a number (2-16):");
+                sendMessage(channelId, "❌ Enter a number:");
             }
         }
         else if (step.equals("join_tournament")) {
@@ -504,14 +503,93 @@ public class TournamentBot extends ListenerAdapter {
                     t.addPlayer(userId, "Player_" + userId);
                     userStates.remove(key);
                     
-                    sendMessage(channelId, "✅ You joined!\n\nTournament: " + t.getName() + 
-                               "\nPlayers: " + t.getPlayers().size() + "/" + t.getMaxPlayers());
+                    // ✅ Shto rolin automatik (emri krijohet nga loja)
+                    addRoleToPlayer(guildId, userId, t.getGame());
+                    
+                    String msg = "✅ You joined!\n\n" +
+                                 "Tournament: " + t.getName() + "\n" +
+                                 "Players: " + t.getPlayers().size() + "/" + t.getMaxPlayers();
+                    sendMessage(channelId, msg);
                 } else {
                     sendMessage(channelId, "❌ Invalid number. Try again:");
                 }
             } catch (NumberFormatException e) {
                 sendMessage(channelId, "❌ Enter a number:");
             }
+        }
+    }
+    
+    /**
+     * ✅ Shton rolin dinamikisht - emri krijohet nga emri i lojës
+     * P.sh. "Free Fire" → "Free Fire Player"
+     *       "Call of Duty" → "Call of Duty Player"
+     */
+    private static void addRoleToPlayer(String guildId, String userId, String game) {
+        try {
+            // ✅ Krijo emrin e rolit nga emri i lojës
+            String roleName = game + " Player";
+            
+            Guild guild = jdaInstance.getGuildById(guildId);
+            if (guild == null) {
+                System.out.println("❌ Guild not found: " + guildId);
+                return;
+            }
+            
+            Member member = guild.getMemberById(userId);
+            if (member == null) {
+                System.out.println("❌ Member not found: " + userId);
+                return;
+            }
+            
+            // Kërko rolin ekzistues
+            List<Role> roles = guild.getRolesByName(roleName, true);
+            Role role = roles.isEmpty() ? null : roles.get(0);
+            
+            // Nëse roli nuk ekziston, krijoje
+            if (role == null) {
+                role = guild.createRole()
+                        .setName(roleName)
+                        .setMentionable(true)
+                        .complete();
+                System.out.println("✅ Created role: " + roleName);
+            }
+            
+            // Shto lojtarit rolin
+            guild.addRoleToMember(member, role).queue(
+                success -> System.out.println("✅ Added role " + roleName + " to " + member.getUser().getName()),
+                error -> System.err.println("❌ Failed to add role: " + error.getMessage())
+            );
+        } catch (Exception e) {
+            System.err.println("❌ Error adding role: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * ✅ Heq rolin dinamikisht - emri krijohet nga emri i lojës
+     */
+    private static void removeRoleFromPlayer(String guildId, String userId, String game) {
+        try {
+            // ✅ Krijo emrin e rolit nga emri i lojës
+            String roleName = game + " Player";
+            
+            Guild guild = jdaInstance.getGuildById(guildId);
+            if (guild == null) return;
+            
+            Member member = guild.getMemberById(userId);
+            if (member == null) return;
+            
+            List<Role> roles = guild.getRolesByName(roleName, true);
+            if (roles.isEmpty()) return;
+            
+            Role role = roles.get(0);
+            
+            // Hiq rolin nga lojtari
+            guild.removeRoleFromMember(member, role).queue(
+                success -> System.out.println("✅ Removed role " + roleName + " from " + member.getUser().getName()),
+                error -> System.err.println("❌ Failed to remove role: " + error.getMessage())
+            );
+        } catch (Exception e) {
+            System.err.println("❌ Error removing role: " + e.getMessage());
         }
     }
     

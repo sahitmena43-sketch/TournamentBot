@@ -7,7 +7,6 @@ public class MessageListener extends ListenerAdapter {
     
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
-        // Ignoro mesazhet e bot-ve
         if (event.getAuthor().isBot()) return;
         
         String message = event.getMessage().getContentRaw();
@@ -15,7 +14,6 @@ public class MessageListener extends ListenerAdapter {
         String guildId = event.getGuild().getId();
         String channelId = event.getChannel().getId();
         
-        // Call the handleUserInput method from TournamentBot
         TournamentBot.handleUserInput(guildId, channelId, userId, message);
     }
 }

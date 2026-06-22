@@ -51,13 +51,20 @@ public class Match {
         }
     }
     
+    public void setFinished(boolean finished) {
+        this.finished = finished;
+    }
+    
     @Override
     public String toString() {
-        String prefix = group != null ? "[Group " + group + "] " : "";
+        String prefix = group != null && !group.equals("Knockout") ? "[Group " + group + "] " : "";
+        if (group != null && group.equals("Knockout")) {
+            prefix = "";
+        }
         
         if (bye) {
             return prefix + "Match " + id + ": " + 
-                   "<@" + player1.getUserId() + "> advances!";
+                   (player1 != null ? "<@" + player1.getUserId() + ">" : "Unknown") + " advances!";
         }
         if (player2 == null) {
             return prefix + "Match " + id + ": Waiting for opponent";

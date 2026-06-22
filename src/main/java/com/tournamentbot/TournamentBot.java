@@ -14,6 +14,7 @@ import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 
+import java.awt.Color;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,18 +25,15 @@ public class TournamentBot extends ListenerAdapter {
         : "YOUR_BOT_TOKEN_HERE";
     
     private static JDA jdaInstance;
-    
     private static final Map<String, Tournament> tournaments = new ConcurrentHashMap<>();
     private static final Map<String, UserState> userStates = new ConcurrentHashMap<>();
     private static long tournamentCounter = 0;
-    
-    // ✅ Roli krijohet dinamikisht nga emri i lojës - LISTA BOSH
-    private static final Map<String, String> GAME_ROLES = new HashMap<>();
-    
     private static boolean commandsRegistered = false;
+    private static boolean dataLoaded = false;
     
     public static void main(String[] args) {
         try {
+            DatabaseManager.connect();
             startHealthServer();
             
             jdaInstance = JDABuilder.createDefault(TOKEN)
@@ -51,7 +49,6 @@ public class TournamentBot extends ListenerAdapter {
             System.out.println("========================================");
             System.out.println("Tournament Bot is starting...");
             System.out.println("Bot is active!");
-            System.out.println("Roles will be created dynamically based on game name!");
             System.out.println("========================================");
             
             Thread.currentThread().join();
@@ -59,6 +56,8 @@ public class TournamentBot extends ListenerAdapter {
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
             e.printStackTrace();
+        } finally {
+            DatabaseManager.close();
         }
     }
     
@@ -90,8 +89,16 @@ public class TournamentBot extends ListenerAdapter {
             registerGlobalCommands(event.getJDA());
             commandsRegistered = true;
             System.out.println("✅ Global commands registered successfully!");
-            System.out.println("========================================");
         }
+        
+        if (!dataLoaded) {
+            Map<String, Tournament> loaded = DatabaseManager.loadTournaments();
+            tournaments.putAll(loaded);
+            dataLoaded = true;
+            System.out.println("✅ Loaded " + loaded.size() + " tournaments from database!");
+        }
+        
+        System.out.println("========================================");
     }
     
     private void registerGlobalCommands(JDA jda) {
@@ -266,6 +273,7 @@ public class TournamentBot extends ListenerAdapter {
         
         adminTournament.setStatus("IN_PROGRESS");
         adminTournament.generateBrackets();
+        DatabaseManager.saveTournament(adminTournament);
         
         event.reply("Tournament started!\n\nName: " + adminTournament.getName() + 
                    "\nPlayers: " + adminTournament.getPlayers().size() + 
@@ -319,10 +327,8 @@ public class TournamentBot extends ListenerAdapter {
         for (Tournament t : tournaments.values()) {
             if (t.getPlayers().containsKey(userId) && !t.getAdminId().equals(userId)) {
                 t.removePlayer(userId);
-                
-                // ✅ Hiq rolin automatik (sipas lojës)
                 removeRoleFromPlayer(event.getGuild().getId(), userId, t.getGame());
-                
+                DatabaseManager.saveTournament(t);
                 event.reply("✅ You left the tournament: " + t.getName()).queue();
                 return;
             }
@@ -360,6 +366,8 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         adminTournament.addPlayer(targetUserId, targetName);
+        DatabaseManager.saveTournament(adminTournament);
+        
         event.reply(targetName + " was added to " + adminTournament.getName() + 
                    "\nAdded by: <@" + userId + ">\nPlayers: " + 
                    adminTournament.getPlayers().size() + "/" + adminTournament.getMaxPlayers()).queue();
@@ -392,9 +400,14 @@ public class TournamentBot extends ListenerAdapter {
         
         boolean found = adminTournament.setMatchScore(matchId, score1, score2);
         if (found) {
+            DatabaseManager.saveTournament(adminTournament);
             event.reply("Score updated!\n\nTournament: " + adminTournament.getName() + 
                        "\nMatch " + matchId + ": " + score1 + " - " + score2 + 
                        "\nSet by: <@" + userId + ">").queue();
+            
+            if (adminTournament.getStatus().equals("FINISHED") && adminTournament.getWinnerId() != null) {
+                giveChampionRole(event.getGuild().getId(), adminTournament.getWinnerId(), adminTournament.getGame());
+            }
         } else {
             event.reply("Match with ID " + matchId + " not found.").queue();
         }
@@ -427,6 +440,8 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         tournaments.remove(tournamentId);
+        DatabaseManager.deleteTournament(tournamentId);
+        
         event.reply("Tournament deleted!\n\nName: " + tournamentName + "\nDeleted by: <@" + userId + ">").queue();
     }
     
@@ -473,10 +488,12 @@ public class TournamentBot extends ListenerAdapter {
                     state.getTournamentName(),
                     state.getTournamentGame(),
                     state.getUserId(),
-                    max
+                    max,
+                    guildId
                 );
                 tournaments.put(tournamentId, t);
                 userStates.remove(key);
+                DatabaseManager.saveTournament(t);
                 
                 sendMessage(channelId, "✅ Tournament created!\n\nName: " + t.getName() + 
                            "\nGame: " + t.getGame() + "\nPlayers: 1/" + max + 
@@ -502,9 +519,8 @@ public class TournamentBot extends ListenerAdapter {
                     
                     t.addPlayer(userId, "Player_" + userId);
                     userStates.remove(key);
-                    
-                    // ✅ Shto rolin automatik (emri krijohet nga loja)
                     addRoleToPlayer(guildId, userId, t.getGame());
+                    DatabaseManager.saveTournament(t);
                     
                     String msg = "✅ You joined!\n\n" +
                                  "Tournament: " + t.getName() + "\n" +
@@ -519,42 +535,23 @@ public class TournamentBot extends ListenerAdapter {
         }
     }
     
-    /**
-     * ✅ Shton rolin dinamikisht - emri krijohet nga emri i lojës
-     * P.sh. "Free Fire" → "Free Fire Player"
-     *       "Call of Duty" → "Call of Duty Player"
-     */
     private static void addRoleToPlayer(String guildId, String userId, String game) {
         try {
-            // ✅ Krijo emrin e rolit nga emri i lojës
             String roleName = game + " Player";
-            
             Guild guild = jdaInstance.getGuildById(guildId);
-            if (guild == null) {
-                System.out.println("❌ Guild not found: " + guildId);
-                return;
-            }
+            if (guild == null) return;
             
             Member member = guild.getMemberById(userId);
-            if (member == null) {
-                System.out.println("❌ Member not found: " + userId);
-                return;
-            }
+            if (member == null) return;
             
-            // Kërko rolin ekzistues
             List<Role> roles = guild.getRolesByName(roleName, true);
             Role role = roles.isEmpty() ? null : roles.get(0);
             
-            // Nëse roli nuk ekziston, krijoje
             if (role == null) {
-                role = guild.createRole()
-                        .setName(roleName)
-                        .setMentionable(true)
-                        .complete();
+                role = guild.createRole().setName(roleName).setMentionable(true).complete();
                 System.out.println("✅ Created role: " + roleName);
             }
             
-            // Shto lojtarit rolin
             guild.addRoleToMember(member, role).queue(
                 success -> System.out.println("✅ Added role " + roleName + " to " + member.getUser().getName()),
                 error -> System.err.println("❌ Failed to add role: " + error.getMessage())
@@ -564,14 +561,9 @@ public class TournamentBot extends ListenerAdapter {
         }
     }
     
-    /**
-     * ✅ Heq rolin dinamikisht - emri krijohet nga emri i lojës
-     */
     private static void removeRoleFromPlayer(String guildId, String userId, String game) {
         try {
-            // ✅ Krijo emrin e rolit nga emri i lojës
             String roleName = game + " Player";
-            
             Guild guild = jdaInstance.getGuildById(guildId);
             if (guild == null) return;
             
@@ -581,10 +573,7 @@ public class TournamentBot extends ListenerAdapter {
             List<Role> roles = guild.getRolesByName(roleName, true);
             if (roles.isEmpty()) return;
             
-            Role role = roles.get(0);
-            
-            // Hiq rolin nga lojtari
-            guild.removeRoleFromMember(member, role).queue(
+            guild.removeRoleFromMember(member, roles.get(0)).queue(
                 success -> System.out.println("✅ Removed role " + roleName + " from " + member.getUser().getName()),
                 error -> System.err.println("❌ Failed to remove role: " + error.getMessage())
             );
@@ -593,16 +582,60 @@ public class TournamentBot extends ListenerAdapter {
         }
     }
     
+    private static void giveChampionRole(String guildId, String userId, String game) {
+        try {
+            String roleName = game + " Champion";
+            Guild guild = jdaInstance.getGuildById(guildId);
+            if (guild == null) return;
+            
+            Member member = guild.getMemberById(userId);
+            if (member == null) return;
+            
+            List<Role> roles = guild.getRolesByName(roleName, true);
+            Role role = roles.isEmpty() ? null : roles.get(0);
+            
+            if (role == null) {
+                role = guild.createRole()
+                        .setName(roleName)
+                        .setMentionable(true)
+                        .setColor(Color.YELLOW)
+                        .complete();
+                System.out.println("✅ Created Champion role: " + roleName);
+            }
+            
+            guild.addRoleToMember(member, role).queue(
+                success -> System.out.println("✅ Added Champion role " + roleName + " to " + member.getUser().getName()),
+                error -> System.err.println("❌ Failed to add Champion role: " + error.getMessage())
+            );
+            
+            String channelId = getActiveChannelId(guildId);
+            if (channelId != null) {
+                sendMessage(channelId, "🏆 **" + member.getUser().getName() + "** është **" + game + " CHAMPION**! 🎉👑");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error giving Champion role: " + e.getMessage());
+        }
+    }
+    
+    private static String getActiveChannelId(String guildId) {
+        try {
+            Guild guild = jdaInstance.getGuildById(guildId);
+            if (guild != null && !guild.getTextChannels().isEmpty()) {
+                return guild.getTextChannels().get(0).getId();
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error getting active channel: " + e.getMessage());
+        }
+        return null;
+    }
+    
     private static void sendMessage(String channelId, String message) {
         if (jdaInstance != null) {
             try {
-                jdaInstance.getTextChannelById(channelId)
-                    .sendMessage(message)
-                    .queue();
+                jdaInstance.getTextChannelById(channelId).sendMessage(message).queue();
             } catch (Exception e) {
                 System.err.println("Error sending message: " + e.getMessage());
             }
         }
-        System.out.println("Message to channel " + channelId + ": " + message);
     }
 }

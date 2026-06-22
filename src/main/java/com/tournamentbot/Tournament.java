@@ -9,26 +9,32 @@ public class Tournament {
     private String adminId;
     private int maxPlayers;
     private String status;
+    private String guildId;
     private Map<String, Player> players;
     private List<Match> brackets;
-    
-    // ✅ Grupet dhe pikët
     private Map<String, List<Player>> groups;
     private Map<String, Integer> points;
+    private List<Match> knockoutMatches;
     private String groupStage;
+    private String knockoutStage;
+    private String winnerId;
     
-    public Tournament(String id, String name, String game, String adminId, int maxPlayers) {
+    public Tournament(String id, String name, String game, String adminId, int maxPlayers, String guildId) {
         this.id = id;
         this.name = name;
         this.game = game;
         this.adminId = adminId;
         this.maxPlayers = maxPlayers;
+        this.guildId = guildId;
         this.status = "WAITING";
         this.players = new HashMap<>();
         this.brackets = new ArrayList<>();
         this.groups = new HashMap<>();
         this.points = new HashMap<>();
+        this.knockoutMatches = new ArrayList<>();
         this.groupStage = "GROUPS";
+        this.knockoutStage = "ROUND_16";
+        this.winnerId = null;
         players.put(adminId, new Player(adminId, "Admin", true));
     }
     
@@ -44,9 +50,6 @@ public class Tournament {
         }
     }
     
-    /**
-     * ✅ Ndan lojtarët në grupe
-     */
     public void generateGroups() {
         groups.clear();
         points.clear();
@@ -54,7 +57,6 @@ public class Tournament {
         List<Player> playerList = new ArrayList<>(players.values());
         Collections.shuffle(playerList);
         
-        // Sa grupe do të jenë (A, B, C, D)
         int numGroups = Math.min(4, Math.max(2, playerList.size() / 2));
         int playersPerGroup = Math.max(2, playerList.size() / numGroups);
         
@@ -78,9 +80,6 @@ public class Tournament {
         }
     }
     
-    /**
-     * ✅ Shton pikë për një lojtar
-     */
     public void addPoints(String userId, int pointsToAdd) {
         points.put(userId, points.getOrDefault(userId, 0) + pointsToAdd);
         Player p = players.get(userId);
@@ -89,14 +88,11 @@ public class Tournament {
         }
     }
     
-    /**
-     * ✅ Gjeneron bracket-in e grupeve
-     */
     public void generateBrackets() {
         brackets.clear();
+        knockoutMatches.clear();
         generateGroups();
         
-        // Krijo ndeshjet brenda grupeve
         for (Map.Entry<String, List<Player>> entry : groups.entrySet()) {
             String groupName = entry.getKey();
             List<Player> groupPlayers = entry.getValue();
@@ -115,15 +111,11 @@ public class Tournament {
         }
     }
     
-    /**
-     * ✅ Vendos rezultatin e një ndeshje dhe përditëson pikët
-     */
     public boolean setMatchScore(int matchId, int score1, int score2) {
         for (Match m : brackets) {
             if (m.getId() == matchId) {
                 m.setScore(score1, score2);
                 
-                // ✅ Përditëso pikët
                 if (score1 > score2) {
                     addPoints(m.getPlayer1().getUserId(), 3);
                     addPoints(m.getPlayer2().getUserId(), 0);
@@ -134,16 +126,143 @@ public class Tournament {
                     addPoints(m.getPlayer1().getUserId(), 1);
                     addPoints(m.getPlayer2().getUserId(), 1);
                 }
+                
+                checkGroupStageComplete();
                 return true;
             }
         }
+        
+        for (Match m : knockoutMatches) {
+            if (m.getId() == matchId) {
+                m.setScore(score1, score2);
+                checkKnockoutStageComplete();
+                return true;
+            }
+        }
+        
         return false;
     }
     
-    /**
-     * ✅ Klasifikimi i grupeve
-     */
+    private void checkGroupStageComplete() {
+        for (Match m : brackets) {
+            if (!m.isFinished()) {
+                return;
+            }
+        }
+        generateKnockoutStage();
+    }
+    
+    private void generateKnockoutStage() {
+        knockoutMatches.clear();
+        knockoutStage = "ROUND_16";
+        
+        List<Player> sortedPlayers = new ArrayList<>(players.values());
+        sortedPlayers.sort((p1, p2) -> {
+            int pts1 = points.getOrDefault(p1.getUserId(), 0);
+            int pts2 = points.getOrDefault(p2.getUserId(), 0);
+            return Integer.compare(pts2, pts1);
+        });
+        
+        int numPlayers = sortedPlayers.size();
+        int nextPowerOfTwo = 1;
+        while (nextPowerOfTwo < numPlayers) {
+            nextPowerOfTwo *= 2;
+        }
+        
+        while (sortedPlayers.size() < nextPowerOfTwo) {
+            sortedPlayers.add(null);
+        }
+        
+        int matchId = brackets.size() + 1;
+        for (int i = 0; i < sortedPlayers.size() / 2; i++) {
+            Player p1 = sortedPlayers.get(i);
+            Player p2 = sortedPlayers.get(sortedPlayers.size() - 1 - i);
+            
+            if (p1 == null && p2 == null) {
+                continue;
+            }
+            
+            Match m = new Match(matchId++, p1, p2, "Knockout");
+            if (p1 == null || p2 == null) {
+                m.setBye(true);
+                if (p1 != null) {
+                    m.setScore(1, 0);
+                } else if (p2 != null) {
+                    m.setScore(0, 1);
+                }
+            }
+            knockoutMatches.add(m);
+        }
+        
+        if (knockoutMatches.size() <= 4) {
+            knockoutStage = "QUARTER";
+        } else if (knockoutMatches.size() <= 2) {
+            knockoutStage = "SEMI";
+        } else if (knockoutMatches.size() <= 1) {
+            knockoutStage = "FINAL";
+        }
+    }
+    
+    private void checkKnockoutStageComplete() {
+        for (Match m : knockoutMatches) {
+            if (!m.isFinished()) {
+                return;
+            }
+        }
+        
+        List<Player> winners = new ArrayList<>();
+        for (Match m : knockoutMatches) {
+            if (m.getPlayer1() != null && m.getScore1() > m.getScore2()) {
+                winners.add(m.getPlayer1());
+            } else if (m.getPlayer2() != null && m.getScore2() > m.getScore1()) {
+                winners.add(m.getPlayer2());
+            }
+        }
+        
+        if (winners.size() <= 1) {
+            finishTournament(winners.isEmpty() ? null : winners.get(0));
+            return;
+        }
+        
+        int matchId = brackets.size() + knockoutMatches.size() + 1;
+        List<Match> nextRound = new ArrayList<>();
+        
+        for (int i = 0; i < winners.size() - 1; i += 2) {
+            Player p1 = winners.get(i);
+            Player p2 = (i + 1 < winners.size()) ? winners.get(i + 1) : null;
+            Match m = new Match(matchId++, p1, p2, "Knockout");
+            if (p2 == null) {
+                m.setBye(true);
+                m.setScore(1, 0);
+            }
+            nextRound.add(m);
+        }
+        
+        knockoutMatches = nextRound;
+        
+        if (knockoutMatches.size() <= 1) {
+            knockoutStage = "FINAL";
+        } else if (knockoutMatches.size() <= 2) {
+            knockoutStage = "SEMI";
+        } else if (knockoutMatches.size() <= 4) {
+            knockoutStage = "QUARTER";
+        } else {
+            knockoutStage = "ROUND_16";
+        }
+    }
+    
+    private void finishTournament(Player winner) {
+        this.status = "FINISHED";
+        this.knockoutStage = "FINISHED";
+        if (winner != null) {
+            this.winnerId = winner.getUserId();
+            winner.setWins(winner.getWins() + 1);
+        }
+    }
+    
     public String getGroupStandings() {
+        if (groups.isEmpty()) return "Groups not generated yet.";
+        
         StringBuilder sb = new StringBuilder();
         sb.append("**🏆 Group Standings:**\n\n");
         
@@ -156,7 +275,6 @@ public class Tournament {
             sb.append(String.format("%-20s %-8s %-8s %-8s %-8s\n", "Player", "P", "W", "D", "L"));
             sb.append("----------------------------------------\n");
             
-            // Rendit sipas pikëve
             groupPlayers.sort((p1, p2) -> {
                 int pts1 = points.getOrDefault(p1.getUserId(), 0);
                 int pts2 = points.getOrDefault(p2.getUserId(), 0);
@@ -165,42 +283,52 @@ public class Tournament {
             
             for (Player p : groupPlayers) {
                 int pts = points.getOrDefault(p.getUserId(), 0);
-                int wins = p.getWins();
-                int draws = p.getDraws();
-                int losses = p.getLosses();
                 sb.append(String.format("%-20s %-8d %-8d %-8d %-8d\n", 
-                    p.getUsername(), pts, wins, draws, losses));
+                    p.getUsername(), pts, p.getWins(), p.getDraws(), p.getLosses()));
             }
             sb.append("```\n\n");
         }
         return sb.toString();
     }
     
-    /**
-     * ✅ Bracket-i i plotë (grupe + knockout)
-     */
     public String getBracketsString() {
-        if (brackets.isEmpty()) return "Bracket not generated.";
-        
         StringBuilder sb = new StringBuilder();
         sb.append("**🏆 Tournament Bracket:**\n\n");
         sb.append("Name: ").append(name).append("\n");
-        sb.append("Game: ").append(game).append("\n\n");
+        sb.append("Game: ").append(game).append("\n");
+        sb.append("Status: ").append(status).append("\n\n");
         
-        // Grupet
+        if (status.equals("WAITING")) {
+            sb.append("⏳ Tournament is waiting to start. Use /starttournament to begin!\n");
+            return sb.toString();
+        }
+        
         sb.append(getGroupStandings());
         
-        // Ndeshjet
-        sb.append("**📋 Matches:**\n\n");
-        for (Match m : brackets) {
-            sb.append(m.toString()).append("\n");
+        if (!knockoutMatches.isEmpty()) {
+            String stageName = "";
+            switch (knockoutStage) {
+                case "ROUND_16": stageName = "🏅 Round of 16"; break;
+                case "QUARTER": stageName = "🏅 Quarterfinals"; break;
+                case "SEMI": stageName = "🏅 Semifinals"; break;
+                case "FINAL": stageName = "🏆 FINAL"; break;
+                case "FINISHED": stageName = "🏆 Tournament Finished"; break;
+                default: stageName = "🏅 Knockout Stage";
+            }
+            
+            sb.append("\n**").append(stageName).append("**\n\n");
+            for (Match m : knockoutMatches) {
+                sb.append(m.toString()).append("\n");
+            }
         }
+        
+        if (winnerId != null && status.equals("FINISHED")) {
+            sb.append("\n**🏆 CHAMPION: <@").append(winnerId).append(">** 🎉\n");
+        }
+        
         return sb.toString();
     }
     
-    /**
-     * ✅ Rezultatet me pikë
-     */
     public String getResultsString() {
         StringBuilder sb = new StringBuilder();
         sb.append("**🏆 Tournament Results:**\n\n");
@@ -208,12 +336,24 @@ public class Tournament {
         
         sb.append(getGroupStandings());
         
-        // Ndeshjet e përfunduara
-        sb.append("\n**📋 Completed Matches:**\n\n");
+        sb.append("\n**📋 Group Matches:**\n\n");
         for (Match m : brackets) {
             if (m.isFinished()) {
                 sb.append(m.toString()).append("\n");
             }
+        }
+        
+        if (!knockoutMatches.isEmpty()) {
+            sb.append("\n**📋 Knockout Matches:**\n\n");
+            for (Match m : knockoutMatches) {
+                if (m.isFinished()) {
+                    sb.append(m.toString()).append("\n");
+                }
+            }
+        }
+        
+        if (winnerId != null && status.equals("FINISHED")) {
+            sb.append("\n**🏆 CHAMPION: <@").append(winnerId).append(">** 🎉\n");
         }
         
         return sb.toString();
@@ -227,7 +367,10 @@ public class Tournament {
         sb.append("Players: ").append(players.size()).append("/").append(maxPlayers).append("\n");
         sb.append("Status: ").append(status).append("\n");
         sb.append("Admin: <@").append(adminId).append(">\n\n");
-        sb.append(getGroupStandings());
+        
+        if (!groups.isEmpty()) {
+            sb.append(getGroupStandings());
+        }
         
         sb.append("\n**👤 Players:**\n");
         int i = 1;
@@ -237,10 +380,14 @@ public class Tournament {
             int pts = points.getOrDefault(p.getUserId(), 0);
             sb.append(" - ").append(pts).append(" pts\n");
         }
+        
+        if (winnerId != null && status.equals("FINISHED")) {
+            sb.append("\n**🏆 CHAMPION: <@").append(winnerId).append(">** 🎉\n");
+        }
+        
         return sb.toString();
     }
     
-    // Getters and Setters
     public String getId() { return id; }
     public String getName() { return name; }
     public String getGame() { return game; }
@@ -248,8 +395,16 @@ public class Tournament {
     public int getMaxPlayers() { return maxPlayers; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getGuildId() { return guildId; }
     public Map<String, Player> getPlayers() { return players; }
     public List<Match> getBrackets() { return brackets; }
     public Map<String, Integer> getPoints() { return points; }
     public Map<String, List<Player>> getGroups() { return groups; }
+    public List<Match> getKnockoutMatches() { return knockoutMatches; }
+    public String getGroupStage() { return groupStage; }
+    public void setGroupStage(String groupStage) { this.groupStage = groupStage; }
+    public String getKnockoutStage() { return knockoutStage; }
+    public void setKnockoutStage(String knockoutStage) { this.knockoutStage = knockoutStage; }
+    public String getWinnerId() { return winnerId; }
+    public void setWinnerId(String winnerId) { this.winnerId = winnerId; }
 }

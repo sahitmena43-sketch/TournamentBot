@@ -58,9 +58,7 @@ public class Match {
     @Override
     public String toString() {
         String prefix = group != null && !group.equals("Knockout") ? "[Group " + group + "] " : "";
-        if (group != null && group.equals("Knockout")) {
-            prefix = "";
-        }
+        if (group != null && group.equals("Knockout")) prefix = "";
         
         if (bye) {
             return prefix + "Match " + id + ": " + 

@@ -25,7 +25,9 @@ public class TournamentBot extends ListenerAdapter {
         : "YOUR_BOT_TOKEN_HERE";
     
     private static JDA jdaInstance;
-    private static final Map<String, Tournament> tournaments = new ConcurrentHashMap<>();
+    
+    // ✅ Çdo server ka tournamentet e veta
+    private static final Map<String, Map<String, Tournament>> serverTournaments = new ConcurrentHashMap<>();
     private static final Map<String, UserState> userStates = new ConcurrentHashMap<>();
     private static long tournamentCounter = 0;
     private static boolean commandsRegistered = false;
@@ -49,6 +51,7 @@ public class TournamentBot extends ListenerAdapter {
             System.out.println("========================================");
             System.out.println("Tournament Bot is starting...");
             System.out.println("Bot is active!");
+            System.out.println("Each server has its own tournaments!");
             System.out.println("========================================");
             
             Thread.currentThread().join();
@@ -92,10 +95,16 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (!dataLoaded) {
-            Map<String, Tournament> loaded = DatabaseManager.loadTournaments();
-            tournaments.putAll(loaded);
+            // ✅ Ngarko tournamentet nga database
+            Map<String, Map<String, Tournament>> loaded = DatabaseManager.loadAllTournaments();
+            serverTournaments.putAll(loaded);
             dataLoaded = true;
-            System.out.println("✅ Loaded " + loaded.size() + " tournaments from database!");
+            
+            int total = 0;
+            for (Map<String, Tournament> map : serverTournaments.values()) {
+                total += map.size();
+            }
+            System.out.println("✅ Loaded " + total + " tournaments from " + serverTournaments.size() + " servers!");
         }
         
         System.out.println("========================================");
@@ -106,7 +115,7 @@ public class TournamentBot extends ListenerAdapter {
         
         commands.add(Commands.slash("help", "Show all available commands"));
         commands.add(Commands.slash("join", "Join an existing tournament"));
-        commands.add(Commands.slash("list", "Show all active tournaments"));
+        commands.add(Commands.slash("list", "Show all active tournaments in this server"));
         commands.add(Commands.slash("bracket", "Show tournament bracket"));
         commands.add(Commands.slash("results", "Show tournament results"));
         commands.add(Commands.slash("info", "Show tournament information"));
@@ -131,20 +140,21 @@ public class TournamentBot extends ListenerAdapter {
     @Override
     public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
         String command = event.getName();
+        String guildId = event.getGuild().getId();
         
         switch (command) {
             case "help": sendHelp(event); break;
             case "newtournament": newTournament(event); break;
             case "join": joinTournament(event); break;
-            case "list": listTournaments(event); break;
-            case "starttournament": startTournament(event); break;
-            case "bracket": showBracket(event); break;
-            case "results": showResults(event); break;
-            case "info": showInfo(event); break;
-            case "leave": leaveTournament(event); break;
-            case "addplayer": addPlayer(event); break;
-            case "setscore": setScore(event); break;
-            case "deletetournament": deleteTournament(event); break;
+            case "list": listTournaments(event, guildId); break;
+            case "starttournament": startTournament(event, guildId); break;
+            case "bracket": showBracket(event, guildId); break;
+            case "results": showResults(event, guildId); break;
+            case "info": showInfo(event, guildId); break;
+            case "leave": leaveTournament(event, guildId); break;
+            case "addplayer": addPlayer(event, guildId); break;
+            case "setscore": setScore(event, guildId); break;
+            case "deletetournament": deleteTournament(event, guildId); break;
             default: event.reply("Unknown command").queue(); break;
         }
     }
@@ -160,7 +170,7 @@ public class TournamentBot extends ListenerAdapter {
                      "/setscore match_id score1 score2 - Set score\n\n" +
                      "**Public Commands:**\n" +
                      "/join - Join tournament\n" +
-                     "/list - List tournaments\n" +
+                     "/list - List tournaments in this server\n" +
                      "/bracket - Show bracket\n" +
                      "/results - Show results\n" +
                      "/info - Tournament info\n" +
@@ -192,8 +202,11 @@ public class TournamentBot extends ListenerAdapter {
     }
     
     private void joinTournament(SlashCommandInteractionEvent event) {
-        if (tournaments.isEmpty()) {
-            event.reply("No active tournaments available.").queue();
+        String guildId = event.getGuild().getId();
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
+        
+        if (tournaments == null || tournaments.isEmpty()) {
+            event.reply("No active tournaments in this server.").queue();
             return;
         }
         
@@ -211,7 +224,7 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (i == 1) {
-            event.reply("No tournaments waiting.").queue();
+            event.reply("No tournaments waiting in this server.").queue();
             return;
         }
         
@@ -219,7 +232,6 @@ public class TournamentBot extends ListenerAdapter {
         event.reply(msg.toString()).queue();
         
         String userId = event.getUser().getId();
-        String guildId = event.getGuild().getId();
         String channelId = event.getChannel().getId();
         String key = guildId + ":" + channelId;
         
@@ -232,13 +244,15 @@ public class TournamentBot extends ListenerAdapter {
         userStates.put(key, state);
     }
     
-    private void listTournaments(SlashCommandInteractionEvent event) {
-        if (tournaments.isEmpty()) {
-            event.reply("No active tournaments.").queue();
+    private void listTournaments(SlashCommandInteractionEvent event, String guildId) {
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
+        
+        if (tournaments == null || tournaments.isEmpty()) {
+            event.reply("No active tournaments in this server.").queue();
             return;
         }
         
-        StringBuilder msg = new StringBuilder("Active Tournaments:\n\n");
+        StringBuilder msg = new StringBuilder("Active Tournaments in this server:\n\n");
         for (Tournament t : tournaments.values()) {
             msg.append("Name: ").append(t.getName()).append("\n")
                .append("Game: ").append(t.getGame()).append("\n")
@@ -250,13 +264,23 @@ public class TournamentBot extends ListenerAdapter {
         event.reply(msg.toString()).queue();
     }
     
-    private void startTournament(SlashCommandInteractionEvent event) {
+    private void startTournament(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
-        Tournament adminTournament = null;
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
-        for (Tournament t : tournaments.values()) {
+        if (tournaments == null) {
+            event.reply("No tournaments in this server.").queue();
+            return;
+        }
+        
+        Tournament adminTournament = null;
+        String tournamentId = null;
+        
+        for (Map.Entry<String, Tournament> entry : tournaments.entrySet()) {
+            Tournament t = entry.getValue();
             if (t.getAdminId().equals(userId) && t.getStatus().equals("WAITING")) {
                 adminTournament = t;
+                tournamentId = entry.getKey();
                 break;
             }
         }
@@ -273,15 +297,23 @@ public class TournamentBot extends ListenerAdapter {
         
         adminTournament.setStatus("IN_PROGRESS");
         adminTournament.generateBrackets();
-        DatabaseManager.saveTournament(adminTournament);
+        
+        // ✅ Ruaj tournamentin në database
+        DatabaseManager.saveTournament(guildId, tournamentId, adminTournament);
         
         event.reply("Tournament started!\n\nName: " + adminTournament.getName() + 
                    "\nPlayers: " + adminTournament.getPlayers().size() + 
                    "\n\nUse /bracket to see matches.\nUse /setscore to set results.").queue();
     }
     
-    private void showBracket(SlashCommandInteractionEvent event) {
+    private void showBracket(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
+        
+        if (tournaments == null) {
+            event.reply("No tournaments in this server.").queue();
+            return;
+        }
         
         for (Tournament t : tournaments.values()) {
             if (t.getPlayers().containsKey(userId)) {
@@ -294,11 +326,17 @@ public class TournamentBot extends ListenerAdapter {
                 }
             }
         }
-        event.reply("You are not part of any tournament.").queue();
+        event.reply("You are not part of any tournament in this server.").queue();
     }
     
-    private void showResults(SlashCommandInteractionEvent event) {
+    private void showResults(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
+        
+        if (tournaments == null) {
+            event.reply("No tournaments in this server.").queue();
+            return;
+        }
         
         for (Tournament t : tournaments.values()) {
             if (t.getPlayers().containsKey(userId)) {
@@ -306,43 +344,80 @@ public class TournamentBot extends ListenerAdapter {
                 return;
             }
         }
-        event.reply("You are not part of any tournament.").queue();
+        event.reply("You are not part of any tournament in this server.").queue();
     }
     
-    private void showInfo(SlashCommandInteractionEvent event) {
+    private void showInfo(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
+        if (tournaments == null) {
+            event.reply("No tournaments in this server.").queue();
+            return;
+        }
+        
+        // ✅ Kërko tournament-in ku përdoruesi është pjesë (vetëm në këtë server)
         for (Tournament t : tournaments.values()) {
             if (t.getPlayers().containsKey(userId)) {
                 event.reply(t.getDetailedInfo()).queue();
                 return;
             }
         }
-        event.reply("You are not part of any tournament.").queue();
+        event.reply("You are not part of any tournament in this server.").queue();
     }
     
-    private void leaveTournament(SlashCommandInteractionEvent event) {
+    private void leaveTournament(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
-        for (Tournament t : tournaments.values()) {
+        if (tournaments == null) {
+            event.reply("No tournaments in this server.").queue();
+            return;
+        }
+        
+        String tournamentId = null;
+        Tournament foundTournament = null;
+        
+        for (Map.Entry<String, Tournament> entry : tournaments.entrySet()) {
+            Tournament t = entry.getValue();
             if (t.getPlayers().containsKey(userId) && !t.getAdminId().equals(userId)) {
-                t.removePlayer(userId);
-                removeRoleFromPlayer(event.getGuild().getId(), userId, t.getGame());
-                DatabaseManager.saveTournament(t);
-                event.reply("✅ You left the tournament: " + t.getName()).queue();
-                return;
+                foundTournament = t;
+                tournamentId = entry.getKey();
+                break;
             }
         }
-        event.reply("You are not part of any tournament.").queue();
+        
+        if (foundTournament == null) {
+            event.reply("You are not part of any tournament in this server.").queue();
+            return;
+        }
+        
+        foundTournament.removePlayer(userId);
+        removeRoleFromPlayer(guildId, userId, foundTournament.getGame());
+        
+        // ✅ Ruaj tournamentin në database
+        DatabaseManager.saveTournament(guildId, tournamentId, foundTournament);
+        
+        event.reply("✅ You left the tournament: " + foundTournament.getName()).queue();
     }
     
-    private void addPlayer(SlashCommandInteractionEvent event) {
+    private void addPlayer(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
-        Tournament adminTournament = null;
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
-        for (Tournament t : tournaments.values()) {
+        if (tournaments == null) {
+            event.reply("No tournaments in this server.").queue();
+            return;
+        }
+        
+        Tournament adminTournament = null;
+        String tournamentId = null;
+        
+        for (Map.Entry<String, Tournament> entry : tournaments.entrySet()) {
+            Tournament t = entry.getValue();
             if (t.getAdminId().equals(userId) && t.getStatus().equals("WAITING")) {
                 adminTournament = t;
+                tournamentId = entry.getKey();
                 break;
             }
         }
@@ -366,20 +441,32 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         adminTournament.addPlayer(targetUserId, targetName);
-        DatabaseManager.saveTournament(adminTournament);
+        
+        // ✅ Ruaj tournamentin në database
+        DatabaseManager.saveTournament(guildId, tournamentId, adminTournament);
         
         event.reply(targetName + " was added to " + adminTournament.getName() + 
                    "\nAdded by: <@" + userId + ">\nPlayers: " + 
                    adminTournament.getPlayers().size() + "/" + adminTournament.getMaxPlayers()).queue();
     }
     
-    private void setScore(SlashCommandInteractionEvent event) {
+    private void setScore(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
-        Tournament adminTournament = null;
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
-        for (Tournament t : tournaments.values()) {
+        if (tournaments == null) {
+            event.reply("No tournaments in this server.").queue();
+            return;
+        }
+        
+        Tournament adminTournament = null;
+        String tournamentId = null;
+        
+        for (Map.Entry<String, Tournament> entry : tournaments.entrySet()) {
+            Tournament t = entry.getValue();
             if (t.getAdminId().equals(userId) && t.getStatus().equals("IN_PROGRESS")) {
                 adminTournament = t;
+                tournamentId = entry.getKey();
                 break;
             }
         }
@@ -400,20 +487,22 @@ public class TournamentBot extends ListenerAdapter {
         
         boolean found = adminTournament.setMatchScore(matchId, score1, score2);
         if (found) {
-            DatabaseManager.saveTournament(adminTournament);
+            // ✅ Ruaj tournamentin në database
+            DatabaseManager.saveTournament(guildId, tournamentId, adminTournament);
+            
             event.reply("Score updated!\n\nTournament: " + adminTournament.getName() + 
                        "\nMatch " + matchId + ": " + score1 + " - " + score2 + 
                        "\nSet by: <@" + userId + ">").queue();
             
             if (adminTournament.getStatus().equals("FINISHED") && adminTournament.getWinnerId() != null) {
-                giveChampionRole(event.getGuild().getId(), adminTournament.getWinnerId(), adminTournament.getGame());
+                giveChampionRole(guildId, adminTournament.getWinnerId(), adminTournament.getGame());
             }
         } else {
             event.reply("Match with ID " + matchId + " not found.").queue();
         }
     }
     
-    private void deleteTournament(SlashCommandInteractionEvent event) {
+    private void deleteTournament(SlashCommandInteractionEvent event, String guildId) {
         Member member = event.getMember();
         
         if (member == null || !member.hasPermission(Permission.ADMINISTRATOR)) {
@@ -422,6 +511,13 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         String userId = event.getUser().getId();
+        Map<String, Tournament> tournaments = serverTournaments.get(guildId);
+        
+        if (tournaments == null) {
+            event.reply("No tournaments in this server.").queue();
+            return;
+        }
+        
         String tournamentId = null;
         String tournamentName = null;
         
@@ -435,12 +531,14 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (tournamentId == null) {
-            event.reply("You are not an admin of any tournament.").queue();
+            event.reply("You are not an admin of any tournament in this server.").queue();
             return;
         }
         
         tournaments.remove(tournamentId);
-        DatabaseManager.deleteTournament(tournamentId);
+        
+        // ✅ Fshi tournamentin nga database
+        DatabaseManager.deleteTournament(guildId, tournamentId);
         
         event.reply("Tournament deleted!\n\nName: " + tournamentName + "\nDeleted by: <@" + userId + ">").queue();
     }
@@ -491,9 +589,15 @@ public class TournamentBot extends ListenerAdapter {
                     max,
                     guildId
                 );
-                tournaments.put(tournamentId, t);
+                
+                // ✅ Shto tournamentin në serverin e duhur
+                serverTournaments.computeIfAbsent(guildId, k -> new ConcurrentHashMap<>())
+                                 .put(tournamentId, t);
+                
                 userStates.remove(key);
-                DatabaseManager.saveTournament(t);
+                
+                // ✅ Ruaj tournamentin në database
+                DatabaseManager.saveTournament(guildId, tournamentId, t);
                 
                 sendMessage(channelId, "✅ Tournament created!\n\nName: " + t.getName() + 
                            "\nGame: " + t.getGame() + "\nPlayers: 1/" + max + 
@@ -509,7 +613,21 @@ public class TournamentBot extends ListenerAdapter {
                 
                 if (tournamentMap.containsKey(selected)) {
                     String tournamentId = tournamentMap.get(selected);
+                    Map<String, Tournament> tournaments = serverTournaments.get(guildId);
+                    
+                    if (tournaments == null) {
+                        sendMessage(channelId, "❌ Tournament not found!");
+                        userStates.remove(key);
+                        return;
+                    }
+                    
                     Tournament t = tournaments.get(tournamentId);
+                    
+                    if (t == null) {
+                        sendMessage(channelId, "❌ Tournament not found!");
+                        userStates.remove(key);
+                        return;
+                    }
                     
                     if (t.getPlayers().size() >= t.getMaxPlayers()) {
                         sendMessage(channelId, "❌ Tournament is full!");
@@ -519,8 +637,12 @@ public class TournamentBot extends ListenerAdapter {
                     
                     t.addPlayer(userId, "Player_" + userId);
                     userStates.remove(key);
+                    
+                    // ✅ Shto rolin automatik (VETËM PËR DLS DHE FC MOBILE)
                     addRoleToPlayer(guildId, userId, t.getGame());
-                    DatabaseManager.saveTournament(t);
+                    
+                    // ✅ Ruaj tournamentin në database
+                    DatabaseManager.saveTournament(guildId, tournamentId, t);
                     
                     String msg = "✅ You joined!\n\n" +
                                  "Tournament: " + t.getName() + "\n" +
@@ -535,23 +657,59 @@ public class TournamentBot extends ListenerAdapter {
         }
     }
     
+    // ==================== METODAT PËR ROLE ====================
+    
+    private static boolean isFootballGame(String game) {
+        String gameLower = game.toLowerCase();
+        return gameLower.contains("dream league") || 
+               gameLower.contains("dls") || 
+               gameLower.contains("fc mobile") || 
+               gameLower.contains("fifa") || 
+               gameLower.contains("efootball") ||
+               gameLower.contains("pes") ||
+               gameLower.equals("football") ||
+               gameLower.equals("soccer");
+    }
+    
+    private static String getRoleName(String game) {
+        String gameLower = game.toLowerCase();
+        if (gameLower.contains("dream league") || gameLower.contains("dls")) {
+            return "DLS PLAYER";
+        } else if (gameLower.contains("fc mobile")) {
+            return "FC MOBILE PLAYER";
+        } else if (gameLower.contains("fifa")) {
+            return "FIFA PLAYER";
+        } else {
+            return game.toUpperCase() + " PLAYER";
+        }
+    }
+    
+    private static Role getOrCreateRole(Guild guild, String roleName) {
+        List<Role> roles = guild.getRolesByName(roleName, true);
+        if (!roles.isEmpty()) {
+            return roles.get(0);
+        }
+        return guild.createRole()
+                .setName(roleName)
+                .setMentionable(true)
+                .complete();
+    }
+    
     private static void addRoleToPlayer(String guildId, String userId, String game) {
         try {
-            String roleName = game + " Player";
+            if (!isFootballGame(game)) {
+                System.out.println("⚠️ No role assigned for " + game + " (only DLS and FC Mobile get roles)");
+                return;
+            }
+            
+            String roleName = getRoleName(game);
             Guild guild = jdaInstance.getGuildById(guildId);
             if (guild == null) return;
             
             Member member = guild.getMemberById(userId);
             if (member == null) return;
             
-            List<Role> roles = guild.getRolesByName(roleName, true);
-            Role role = roles.isEmpty() ? null : roles.get(0);
-            
-            if (role == null) {
-                role = guild.createRole().setName(roleName).setMentionable(true).complete();
-                System.out.println("✅ Created role: " + roleName);
-            }
-            
+            Role role = getOrCreateRole(guild, roleName);
             guild.addRoleToMember(member, role).queue(
                 success -> System.out.println("✅ Added role " + roleName + " to " + member.getUser().getName()),
                 error -> System.err.println("❌ Failed to add role: " + error.getMessage())
@@ -563,7 +721,9 @@ public class TournamentBot extends ListenerAdapter {
     
     private static void removeRoleFromPlayer(String guildId, String userId, String game) {
         try {
-            String roleName = game + " Player";
+            if (!isFootballGame(game)) return;
+            
+            String roleName = getRoleName(game);
             Guild guild = jdaInstance.getGuildById(guildId);
             if (guild == null) return;
             
@@ -584,34 +744,33 @@ public class TournamentBot extends ListenerAdapter {
     
     private static void giveChampionRole(String guildId, String userId, String game) {
         try {
-            String roleName = game + " Champion";
+            if (!isFootballGame(game)) {
+                System.out.println("⚠️ No champion role for " + game);
+                return;
+            }
+            
+            String roleName = game + " CHAMPION";
             Guild guild = jdaInstance.getGuildById(guildId);
             if (guild == null) return;
             
             Member member = guild.getMemberById(userId);
             if (member == null) return;
             
-            List<Role> roles = guild.getRolesByName(roleName, true);
-            Role role = roles.isEmpty() ? null : roles.get(0);
-            
-            if (role == null) {
-                role = guild.createRole()
-                        .setName(roleName)
-                        .setMentionable(true)
-                        .setColor(Color.YELLOW)
-                        .complete();
-                System.out.println("✅ Created Champion role: " + roleName);
+            Role role = getOrCreateRole(guild, roleName);
+            if (role != null && !role.getColor().equals(Color.YELLOW)) {
+                role.getManager().setColor(Color.YELLOW).queue();
             }
             
             guild.addRoleToMember(member, role).queue(
-                success -> System.out.println("✅ Added Champion role " + roleName + " to " + member.getUser().getName()),
+                success -> {
+                    System.out.println("✅ Added Champion role " + roleName + " to " + member.getUser().getName());
+                    String channelId = getActiveChannelId(guildId);
+                    if (channelId != null) {
+                        sendMessage(channelId, "🏆 **" + member.getUser().getName() + "** është **" + game + " CHAMPION**! 🎉👑");
+                    }
+                },
                 error -> System.err.println("❌ Failed to add Champion role: " + error.getMessage())
             );
-            
-            String channelId = getActiveChannelId(guildId);
-            if (channelId != null) {
-                sendMessage(channelId, "🏆 **" + member.getUser().getName() + "** është **" + game + " CHAMPION**! 🎉👑");
-            }
         } catch (Exception e) {
             System.err.println("❌ Error giving Champion role: " + e.getMessage());
         }

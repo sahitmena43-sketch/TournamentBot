@@ -13,8 +13,10 @@ import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.EmbedBuilder;
 
 import java.awt.Color;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,7 +28,6 @@ public class TournamentBot extends ListenerAdapter {
     
     private static JDA jdaInstance;
     
-    // ✅ Çdo server ka tournamentet e veta
     private static final Map<String, Map<String, Tournament>> serverTournaments = new ConcurrentHashMap<>();
     private static final Map<String, UserState> userStates = new ConcurrentHashMap<>();
     private static long tournamentCounter = 0;
@@ -95,7 +96,6 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (!dataLoaded) {
-            // ✅ Ngarko tournamentet nga database
             Map<String, Map<String, Tournament>> loaded = DatabaseManager.loadAllTournaments();
             serverTournaments.putAll(loaded);
             dataLoaded = true;
@@ -160,22 +160,30 @@ public class TournamentBot extends ListenerAdapter {
     }
     
     private void sendHelp(SlashCommandInteractionEvent event) {
-        String msg = "**Available Commands:**\n\n" +
-                     "**Server Admin Commands:**\n" +
-                     "/newtournament - Create new tournament\n" +
-                     "/deletetournament - Delete tournament\n\n" +
-                     "**Tournament Admin Commands:**\n" +
-                     "/starttournament - Start tournament\n" +
-                     "/addplayer @user - Add player\n" +
-                     "/setscore match_id score1 score2 - Set score\n\n" +
-                     "**Public Commands:**\n" +
-                     "/join - Join tournament\n" +
-                     "/list - List tournaments in this server\n" +
-                     "/bracket - Show bracket\n" +
-                     "/results - Show results\n" +
-                     "/info - Tournament info\n" +
-                     "/leave - Leave tournament";
-        event.reply(msg).queue();
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.setTitle("📋 Tournament Bot Commands");
+        embed.setColor(Color.BLUE);
+        embed.setFooter("Tournament Bot", event.getJDA().getSelfUser().getAvatarUrl());
+        embed.setTimestamp(Instant.now());
+        
+        embed.addField("🔒 Server Admin Commands",
+                       "/newtournament - Create new tournament\n" +
+                       "/deletetournament - Delete tournament", false);
+        
+        embed.addField("👑 Tournament Admin Commands",
+                       "/starttournament - Start tournament\n" +
+                       "/addplayer @user - Add player\n" +
+                       "/setscore match_id score1 score2 - Set score", false);
+        
+        embed.addField("👥 Public Commands",
+                       "/join - Join tournament\n" +
+                       "/list - List tournaments in this server\n" +
+                       "/bracket - Show bracket\n" +
+                       "/results - Show results\n" +
+                       "/info - Tournament info\n" +
+                       "/leave - Leave tournament", false);
+        
+        event.replyEmbeds(embed.build()).queue();
     }
     
     private void newTournament(SlashCommandInteractionEvent event) {
@@ -252,16 +260,32 @@ public class TournamentBot extends ListenerAdapter {
             return;
         }
         
-        StringBuilder msg = new StringBuilder("Active Tournaments in this server:\n\n");
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.setTitle("🏆 Active Tournaments in this Server");
+        embed.setColor(Color.BLUE);
+        embed.setFooter("Tournament Bot", event.getJDA().getSelfUser().getAvatarUrl());
+        embed.setTimestamp(Instant.now());
+        
+        StringBuilder description = new StringBuilder();
+        int count = 0;
+        
         for (Tournament t : tournaments.values()) {
-            msg.append("Name: ").append(t.getName()).append("\n")
-               .append("Game: ").append(t.getGame()).append("\n")
-               .append("Players: ").append(t.getPlayers().size())
-               .append("/").append(t.getMaxPlayers()).append("\n")
-               .append("Status: ").append(t.getStatus()).append("\n")
-               .append("Admin: <@").append(t.getAdminId()).append(">\n\n");
+            count++;
+            String statusEmoji = t.getStatus().equals("WAITING") ? "⏳" : 
+                                t.getStatus().equals("IN_PROGRESS") ? "⚔️" : "✅";
+            
+            description.append("**").append(count).append(". ").append(t.getName()).append("**\n")
+                       .append("🎮 **Game:** ").append(t.getGame()).append("\n")
+                       .append("👥 **Players:** ").append(t.getPlayers().size())
+                       .append("/").append(t.getMaxPlayers()).append("\n")
+                       .append("📊 **Status:** ").append(statusEmoji).append(" ").append(t.getStatus()).append("\n")
+                       .append("👑 **Admin:** <@").append(t.getAdminId()).append(">\n\n");
         }
-        event.reply(msg.toString()).queue();
+        
+        embed.setDescription(description.toString());
+        embed.addField("📌 Total Tournaments", String.valueOf(count), false);
+        
+        event.replyEmbeds(embed.build()).queue();
     }
     
     private void startTournament(SlashCommandInteractionEvent event, String guildId) {
@@ -297,8 +321,6 @@ public class TournamentBot extends ListenerAdapter {
         
         adminTournament.setStatus("IN_PROGRESS");
         adminTournament.generateBrackets();
-        
-        // ✅ Ruaj tournamentin në database
         DatabaseManager.saveTournament(guildId, tournamentId, adminTournament);
         
         event.reply("Tournament started!\n\nName: " + adminTournament.getName() + 
@@ -315,18 +337,76 @@ public class TournamentBot extends ListenerAdapter {
             return;
         }
         
+        Tournament foundTournament = null;
         for (Tournament t : tournaments.values()) {
             if (t.getPlayers().containsKey(userId)) {
-                if (t.getStatus().equals("IN_PROGRESS") || t.getStatus().equals("FINISHED")) {
-                    event.reply(t.getBracketsString()).queue();
-                    return;
-                } else {
-                    event.reply("Tournament has not started yet.").queue();
-                    return;
-                }
+                foundTournament = t;
+                break;
             }
         }
-        event.reply("You are not part of any tournament in this server.").queue();
+        
+        if (foundTournament == null) {
+            event.reply("You are not part of any tournament in this server.").queue();
+            return;
+        }
+        
+        if (foundTournament.getStatus().equals("WAITING")) {
+            event.reply("Tournament has not started yet.").queue();
+            return;
+        }
+        
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.setTitle("🔀 Tournament Bracket - " + foundTournament.getName());
+        embed.setColor(Color.ORANGE);
+        embed.setFooter("Tournament Bot", event.getJDA().getSelfUser().getAvatarUrl());
+        embed.setTimestamp(Instant.now());
+        
+        embed.addField("🎮 Game", foundTournament.getGame(), true);
+        embed.addField("📊 Status", foundTournament.getStatus(), true);
+        embed.addField("👥 Players", String.valueOf(foundTournament.getPlayers().size()), true);
+        
+        if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getGroups().isEmpty()) {
+            StringBuilder groupsInfo = new StringBuilder();
+            for (Map.Entry<String, List<Player>> entry : foundTournament.getGroups().entrySet()) {
+                groupsInfo.append("**Group ").append(entry.getKey()).append(":** ");
+                List<String> names = new ArrayList<>();
+                for (Player p : entry.getValue()) {
+                    names.add("<@" + p.getUserId() + ">");
+                }
+                groupsInfo.append(String.join(", ", names)).append("\n");
+            }
+            embed.addField("📋 Groups", groupsInfo.toString(), false);
+        }
+        
+        if (!foundTournament.getBrackets().isEmpty()) {
+            StringBuilder matches = new StringBuilder();
+            int matchCount = 0;
+            for (Match m : foundTournament.getBrackets()) {
+                matchCount++;
+                matches.append(m.toString()).append("\n");
+                if (matchCount >= 15) {
+                    matches.append("... and more matches");
+                    break;
+                }
+            }
+            embed.addField("📋 Matches", matches.toString(), false);
+        }
+        
+        if (!foundTournament.getKnockoutMatches().isEmpty()) {
+            StringBuilder knockout = new StringBuilder();
+            int matchCount = 0;
+            for (Match m : foundTournament.getKnockoutMatches()) {
+                matchCount++;
+                knockout.append(m.toString()).append("\n");
+                if (matchCount >= 10) {
+                    knockout.append("... and more");
+                    break;
+                }
+            }
+            embed.addField("🏅 Knockout Matches", knockout.toString(), false);
+        }
+        
+        event.replyEmbeds(embed.build()).queue();
     }
     
     private void showResults(SlashCommandInteractionEvent event, String guildId) {
@@ -338,13 +418,93 @@ public class TournamentBot extends ListenerAdapter {
             return;
         }
         
+        Tournament foundTournament = null;
         for (Tournament t : tournaments.values()) {
             if (t.getPlayers().containsKey(userId)) {
-                event.reply(t.getResultsString()).queue();
-                return;
+                foundTournament = t;
+                break;
             }
         }
-        event.reply("You are not part of any tournament in this server.").queue();
+        
+        if (foundTournament == null) {
+            event.reply("You are not part of any tournament in this server.").queue();
+            return;
+        }
+        
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.setTitle("🏆 Tournament Results - " + foundTournament.getName());
+        embed.setColor(Color.YELLOW);
+        embed.setFooter("Tournament Bot", event.getJDA().getSelfUser().getAvatarUrl());
+        embed.setTimestamp(Instant.now());
+        
+        embed.addField("🎮 Game", foundTournament.getGame(), true);
+        embed.addField("📊 Status", foundTournament.getStatus(), true);
+        embed.addField("👥 Total Players", String.valueOf(foundTournament.getPlayers().size()), true);
+        
+        // ✅ KORRIGJUAR - përdor variabël final
+        List<Player> sortedPlayers = new ArrayList<>(foundTournament.getPlayers().values());
+        final Tournament finalTournament = foundTournament;
+        
+        if (foundTournament.getTournamentType().equals("FOOTBALL")) {
+            sortedPlayers.sort((p1, p2) -> {
+                return Integer.compare(
+                    finalTournament.getPoints().getOrDefault(p2.getUserId(), 0),
+                    finalTournament.getPoints().getOrDefault(p1.getUserId(), 0)
+                );
+            });
+        } else {
+            sortedPlayers.sort((p1, p2) -> Integer.compare(p2.getWins(), p1.getWins()));
+        }
+        
+        StringBuilder ranking = new StringBuilder();
+        int rank = 1;
+        for (Player p : sortedPlayers) {
+            String pts = foundTournament.getTournamentType().equals("FOOTBALL") ? 
+                        " - " + foundTournament.getPoints().getOrDefault(p.getUserId(), 0) + " pts" : 
+                        " - " + p.getWins() + " wins";
+            ranking.append(rank++).append(". <@").append(p.getUserId()).append(">").append(pts).append("\n");
+            if (rank > 20) {
+                ranking.append("... and ").append(sortedPlayers.size() - 20).append(" more");
+                break;
+            }
+        }
+        embed.addField("📊 Ranking", ranking.toString(), false);
+        
+        if (!foundTournament.getBrackets().isEmpty()) {
+            StringBuilder finishedMatches = new StringBuilder();
+            int matchCount = 0;
+            for (Match m : foundTournament.getBrackets()) {
+                if (m.isFinished()) {
+                    matchCount++;
+                    finishedMatches.append(m.toString()).append("\n");
+                    if (matchCount >= 10) break;
+                }
+            }
+            if (matchCount > 0) {
+                embed.addField("✅ Finished Matches", finishedMatches.toString(), false);
+            }
+        }
+        
+        if (!foundTournament.getKnockoutMatches().isEmpty()) {
+            StringBuilder knockoutMatches = new StringBuilder();
+            int matchCount = 0;
+            for (Match m : foundTournament.getKnockoutMatches()) {
+                if (m.isFinished()) {
+                    matchCount++;
+                    knockoutMatches.append(m.toString()).append("\n");
+                    if (matchCount >= 10) break;
+                }
+            }
+            if (matchCount > 0) {
+                embed.addField("🏅 Knockout Matches", knockoutMatches.toString(), false);
+            }
+        }
+        
+        if (foundTournament.getWinnerId() != null && foundTournament.getStatus().equals("FINISHED")) {
+            embed.addField("🏆 CHAMPION", "<@" + foundTournament.getWinnerId() + "> 🎉", false);
+        }
+        
+        event.replyEmbeds(embed.build()).queue();
     }
     
     private void showInfo(SlashCommandInteractionEvent event, String guildId) {
@@ -356,14 +516,76 @@ public class TournamentBot extends ListenerAdapter {
             return;
         }
         
-        // ✅ Kërko tournament-in ku përdoruesi është pjesë (vetëm në këtë server)
+        Tournament foundTournament = null;
         for (Tournament t : tournaments.values()) {
             if (t.getPlayers().containsKey(userId)) {
-                event.reply(t.getDetailedInfo()).queue();
-                return;
+                foundTournament = t;
+                break;
             }
         }
-        event.reply("You are not part of any tournament in this server.").queue();
+        
+        if (foundTournament == null) {
+            event.reply("You are not part of any tournament in this server.").queue();
+            return;
+        }
+        
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.setTitle("🏆 Tournament Information");
+        embed.setColor(Color.GREEN);
+        embed.setFooter("Tournament Bot", event.getJDA().getSelfUser().getAvatarUrl());
+        embed.setTimestamp(Instant.now());
+        
+        String statusEmoji = foundTournament.getStatus().equals("WAITING") ? "⏳" : 
+                            foundTournament.getStatus().equals("IN_PROGRESS") ? "⚔️" : "✅";
+        
+        embed.addField("📌 Name", foundTournament.getName(), true);
+        embed.addField("🎮 Game", foundTournament.getGame(), true);
+        embed.addField("📊 Status", statusEmoji + " " + foundTournament.getStatus(), true);
+        embed.addField("👥 Players", foundTournament.getPlayers().size() + "/" + foundTournament.getMaxPlayers(), true);
+        embed.addField("👑 Admin", "<@" + foundTournament.getAdminId() + ">", true);
+        embed.addField("🏷️ Type", foundTournament.getTournamentType(), true);
+        
+        StringBuilder playersList = new StringBuilder();
+        int i = 1;
+        for (Player p : foundTournament.getPlayers().values()) {
+            String role = p.isAdmin() ? " 👑" : "";
+            playersList.append(i++).append(". <@").append(p.getUserId()).append(">").append(role).append("\n");
+            if (i > 20) {
+                playersList.append("... and ").append(foundTournament.getPlayers().size() - 20).append(" more");
+                break;
+            }
+        }
+        embed.addField("👤 Players List", playersList.toString(), false);
+        
+        if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getGroups().isEmpty()) {
+            StringBuilder groupsInfo = new StringBuilder();
+            for (Map.Entry<String, List<Player>> entry : foundTournament.getGroups().entrySet()) {
+                groupsInfo.append("**Group ").append(entry.getKey()).append(":** ");
+                List<String> names = new ArrayList<>();
+                for (Player p : entry.getValue()) {
+                    names.add("<@" + p.getUserId() + ">");
+                }
+                groupsInfo.append(String.join(", ", names)).append("\n");
+            }
+            embed.addField("📋 Groups", groupsInfo.toString(), false);
+        }
+        
+        if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getPoints().isEmpty()) {
+            StringBuilder pointsInfo = new StringBuilder();
+            List<Map.Entry<String, Integer>> sortedPoints = new ArrayList<>(foundTournament.getPoints().entrySet());
+            sortedPoints.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+            for (Map.Entry<String, Integer> entry : sortedPoints) {
+                pointsInfo.append("<@").append(entry.getKey()).append("> - ").append(entry.getValue()).append(" pts\n");
+                if (pointsInfo.length() > 1000) break;
+            }
+            embed.addField("📊 Points", pointsInfo.toString(), false);
+        }
+        
+        if (foundTournament.getWinnerId() != null && foundTournament.getStatus().equals("FINISHED")) {
+            embed.addField("🏆 CHAMPION", "<@" + foundTournament.getWinnerId() + "> 🎉", false);
+        }
+        
+        event.replyEmbeds(embed.build()).queue();
     }
     
     private void leaveTournament(SlashCommandInteractionEvent event, String guildId) {
@@ -394,8 +616,6 @@ public class TournamentBot extends ListenerAdapter {
         
         foundTournament.removePlayer(userId);
         removeRoleFromPlayer(guildId, userId, foundTournament.getGame());
-        
-        // ✅ Ruaj tournamentin në database
         DatabaseManager.saveTournament(guildId, tournamentId, foundTournament);
         
         event.reply("✅ You left the tournament: " + foundTournament.getName()).queue();
@@ -441,8 +661,6 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         adminTournament.addPlayer(targetUserId, targetName);
-        
-        // ✅ Ruaj tournamentin në database
         DatabaseManager.saveTournament(guildId, tournamentId, adminTournament);
         
         event.reply(targetName + " was added to " + adminTournament.getName() + 
@@ -487,9 +705,7 @@ public class TournamentBot extends ListenerAdapter {
         
         boolean found = adminTournament.setMatchScore(matchId, score1, score2);
         if (found) {
-            // ✅ Ruaj tournamentin në database
             DatabaseManager.saveTournament(guildId, tournamentId, adminTournament);
-            
             event.reply("Score updated!\n\nTournament: " + adminTournament.getName() + 
                        "\nMatch " + matchId + ": " + score1 + " - " + score2 + 
                        "\nSet by: <@" + userId + ">").queue();
@@ -536,8 +752,6 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         tournaments.remove(tournamentId);
-        
-        // ✅ Fshi tournamentin nga database
         DatabaseManager.deleteTournament(guildId, tournamentId);
         
         event.reply("Tournament deleted!\n\nName: " + tournamentName + "\nDeleted by: <@" + userId + ">").queue();
@@ -590,13 +804,10 @@ public class TournamentBot extends ListenerAdapter {
                     guildId
                 );
                 
-                // ✅ Shto tournamentin në serverin e duhur
                 serverTournaments.computeIfAbsent(guildId, k -> new ConcurrentHashMap<>())
                                  .put(tournamentId, t);
                 
                 userStates.remove(key);
-                
-                // ✅ Ruaj tournamentin në database
                 DatabaseManager.saveTournament(guildId, tournamentId, t);
                 
                 sendMessage(channelId, "✅ Tournament created!\n\nName: " + t.getName() + 
@@ -638,10 +849,7 @@ public class TournamentBot extends ListenerAdapter {
                     t.addPlayer(userId, "Player_" + userId);
                     userStates.remove(key);
                     
-                    // ✅ Shto rolin automatik (VETËM PËR DLS DHE FC MOBILE)
                     addRoleToPlayer(guildId, userId, t.getGame());
-                    
-                    // ✅ Ruaj tournamentin në database
                     DatabaseManager.saveTournament(guildId, tournamentId, t);
                     
                     String msg = "✅ You joined!\n\n" +

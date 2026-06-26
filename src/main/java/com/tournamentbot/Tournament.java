@@ -422,7 +422,6 @@ public class Tournament {
         return sb.toString();
     }
     
-    // Getters & Setters
     public String getId() { return id; }
     public String getName() { return name; }
     public String getGame() { return game; }

@@ -8,7 +8,7 @@ public class ClearCommands {
     public static void main(String[] args) {
         String token = System.getenv("BOT_TOKEN");
         if (token == null) {
-            token = "VENDOS_TOKENIN_TEND_KETU";
+            token = "YOUR_BOT_TOKEN_HERE";
         }
         
         try {
@@ -16,13 +16,11 @@ public class ClearCommands {
                     .enableIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT)
                     .build();
             
-            // Fshi komandat globale
             jda.updateCommands().queue(
                 success -> System.out.println("✅ Global commands cleared!"),
                 error -> System.out.println("❌ Error: " + error.getMessage())
             );
             
-            // Fshi komandat e serverit
             jda.getGuilds().forEach(guild -> {
                 guild.updateCommands().queue(
                     s -> System.out.println("✅ Cleared commands for: " + guild.getName()),

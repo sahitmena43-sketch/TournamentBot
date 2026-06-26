@@ -18,7 +18,6 @@ public class DatabaseManager {
     }
     
     private static void createTables() throws SQLException {
-        // ✅ Tabela përmban guildId (serverin)
         String sqlTournaments = "CREATE TABLE IF NOT EXISTS tournaments (" +
                                 "guildId TEXT, " +
                                 "id TEXT, " +
@@ -84,12 +83,8 @@ public class DatabaseManager {
         connection.createStatement().execute(sqlMatches);
     }
     
-    /**
-     * ✅ Ruan një tournament në database
-     */
     public static void saveTournament(String guildId, String tournamentId, Tournament t) {
         try {
-            // Ruaj tournamentin kryesor
             String sql = "INSERT OR REPLACE INTO tournaments (guildId, id, name, game, adminId, maxPlayers, status, groupStage, knockoutStage, winnerId) " +
                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             PreparedStatement stmt = connection.prepareStatement(sql);
@@ -105,7 +100,6 @@ public class DatabaseManager {
             stmt.setString(10, t.getWinnerId());
             stmt.executeUpdate();
             
-            // Ruaj lojtarët
             for (Player p : t.getPlayers().values()) {
                 String sqlPlayer = "INSERT OR REPLACE INTO players (guildId, tournamentId, userId, username, isAdmin, wins, draws, losses, points, goalsFor, goalsAgainst) " +
                                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -124,7 +118,6 @@ public class DatabaseManager {
                 pstmt.executeUpdate();
             }
             
-            // Ruaj pikët
             for (Map.Entry<String, Integer> entry : t.getPoints().entrySet()) {
                 String sqlPoints = "INSERT OR REPLACE INTO points (guildId, tournamentId, userId, points) VALUES (?, ?, ?, ?)";
                 PreparedStatement pstmt = connection.prepareStatement(sqlPoints);
@@ -135,7 +128,6 @@ public class DatabaseManager {
                 pstmt.executeUpdate();
             }
             
-            // Ruaj grupet
             for (Map.Entry<String, List<Player>> entry : t.getGroups().entrySet()) {
                 String groupName = entry.getKey();
                 for (Player p : entry.getValue()) {
@@ -149,7 +141,6 @@ public class DatabaseManager {
                 }
             }
             
-            // Ruaj ndeshjet
             int matchId = 1;
             for (Match m : t.getBrackets()) {
                 saveMatch(guildId, tournamentId, m, matchId++, false);
@@ -183,9 +174,6 @@ public class DatabaseManager {
         stmt.executeUpdate();
     }
     
-    /**
-     * ✅ Ngarko të gjithë tournamentet nga database
-     */
     public static Map<String, Map<String, Tournament>> loadAllTournaments() {
         Map<String, Map<String, Tournament>> allTournaments = new HashMap<>();
         
@@ -316,9 +304,6 @@ public class DatabaseManager {
         }
     }
     
-    /**
-     * ✅ Fshin një tournament nga database
-     */
     public static void deleteTournament(String guildId, String tournamentId) {
         try {
             String sql = "DELETE FROM tournaments WHERE guildId = ? AND id = ?";

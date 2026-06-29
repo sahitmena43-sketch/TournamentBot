@@ -328,6 +328,9 @@ public class TournamentBot extends ListenerAdapter {
                    "\n\nUse /bracket to see matches.\nUse /setscore to set results.").queue();
     }
     
+    /**
+     * ✅ /bracket - I KORRIGJUAR (ndarja në pjesë për të shmangur limitin)
+     */
     private void showBracket(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
@@ -365,50 +368,89 @@ public class TournamentBot extends ListenerAdapter {
         embed.addField("📊 Status", foundTournament.getStatus(), true);
         embed.addField("👥 Players", String.valueOf(foundTournament.getPlayers().size()), true);
         
+        // ✅ Grupet
         if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getGroups().isEmpty()) {
             StringBuilder groupsInfo = new StringBuilder();
+            int groupCount = 0;
             for (Map.Entry<String, List<Player>> entry : foundTournament.getGroups().entrySet()) {
-                groupsInfo.append("**Group ").append(entry.getKey()).append(":** ");
+                groupCount++;
+                String groupName = entry.getKey();
+                List<Player> groupPlayers = entry.getValue();
+                
+                groupsInfo.append("**Group ").append(groupName).append(":** ");
                 List<String> names = new ArrayList<>();
-                for (Player p : entry.getValue()) {
+                for (Player p : groupPlayers) {
                     names.add("<@" + p.getUserId() + ">");
                 }
                 groupsInfo.append(String.join(", ", names)).append("\n");
+                
+                if (groupCount >= 4) {
+                    embed.addField("📋 Groups", groupsInfo.toString(), false);
+                    groupsInfo = new StringBuilder();
+                    groupCount = 0;
+                }
             }
-            embed.addField("📋 Groups", groupsInfo.toString(), false);
+            if (groupsInfo.length() > 0) {
+                embed.addField("📋 Groups", groupsInfo.toString(), false);
+            }
         }
         
+        // ✅ Ndeshjet e ndara në pjesë
         if (!foundTournament.getBrackets().isEmpty()) {
             StringBuilder matches = new StringBuilder();
             int matchCount = 0;
+            int fieldCount = 0;
+            
             for (Match m : foundTournament.getBrackets()) {
                 matchCount++;
                 matches.append(m.toString()).append("\n");
-                if (matchCount >= 15) {
-                    matches.append("... and more matches");
-                    break;
+                
+                if (matchCount >= 10) {
+                    fieldCount++;
+                    embed.addField("📋 Matches (" + fieldCount + ")", matches.toString(), false);
+                    matches = new StringBuilder();
+                    matchCount = 0;
                 }
             }
-            embed.addField("📋 Matches", matches.toString(), false);
+            if (matches.length() > 0) {
+                fieldCount++;
+                embed.addField("📋 Matches (" + fieldCount + ")", matches.toString(), false);
+            }
         }
         
+        // ✅ Knockout matches të ndara në pjesë
         if (!foundTournament.getKnockoutMatches().isEmpty()) {
             StringBuilder knockout = new StringBuilder();
             int matchCount = 0;
+            int fieldCount = 0;
+            
             for (Match m : foundTournament.getKnockoutMatches()) {
                 matchCount++;
                 knockout.append(m.toString()).append("\n");
+                
                 if (matchCount >= 10) {
-                    knockout.append("... and more");
-                    break;
+                    fieldCount++;
+                    embed.addField("🏅 Knockout Matches (" + fieldCount + ")", knockout.toString(), false);
+                    knockout = new StringBuilder();
+                    matchCount = 0;
                 }
             }
-            embed.addField("🏅 Knockout Matches", knockout.toString(), false);
+            if (knockout.length() > 0) {
+                fieldCount++;
+                embed.addField("🏅 Knockout Matches (" + fieldCount + ")", knockout.toString(), false);
+            }
+        }
+        
+        if (foundTournament.getWinnerId() != null && foundTournament.getStatus().equals("FINISHED")) {
+            embed.addField("🏆 CHAMPION", "<@" + foundTournament.getWinnerId() + "> 🎉", false);
         }
         
         event.replyEmbeds(embed.build()).queue();
     }
     
+    /**
+     * ✅ /results - I KORRIGJUAR (renditja nga më i madhi tek më i vogli)
+     */
     private void showResults(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
@@ -441,7 +483,6 @@ public class TournamentBot extends ListenerAdapter {
         embed.addField("📊 Status", foundTournament.getStatus(), true);
         embed.addField("👥 Total Players", String.valueOf(foundTournament.getPlayers().size()), true);
         
-        // ✅ KORRIGJUAR - përdor variabël final
         List<Player> sortedPlayers = new ArrayList<>(foundTournament.getPlayers().values());
         final Tournament finalTournament = foundTournament;
         
@@ -559,24 +600,39 @@ public class TournamentBot extends ListenerAdapter {
         
         if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getGroups().isEmpty()) {
             StringBuilder groupsInfo = new StringBuilder();
+            int groupCount = 0;
             for (Map.Entry<String, List<Player>> entry : foundTournament.getGroups().entrySet()) {
-                groupsInfo.append("**Group ").append(entry.getKey()).append(":** ");
+                groupCount++;
+                String groupName = entry.getKey();
+                List<Player> groupPlayers = entry.getValue();
+                
+                groupsInfo.append("**Group ").append(groupName).append(":** ");
                 List<String> names = new ArrayList<>();
-                for (Player p : entry.getValue()) {
+                for (Player p : groupPlayers) {
                     names.add("<@" + p.getUserId() + ">");
                 }
                 groupsInfo.append(String.join(", ", names)).append("\n");
+                
+                if (groupCount >= 4) {
+                    embed.addField("📋 Groups", groupsInfo.toString(), false);
+                    groupsInfo = new StringBuilder();
+                    groupCount = 0;
+                }
             }
-            embed.addField("📋 Groups", groupsInfo.toString(), false);
+            if (groupsInfo.length() > 0) {
+                embed.addField("📋 Groups", groupsInfo.toString(), false);
+            }
         }
         
         if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getPoints().isEmpty()) {
             StringBuilder pointsInfo = new StringBuilder();
             List<Map.Entry<String, Integer>> sortedPoints = new ArrayList<>(foundTournament.getPoints().entrySet());
             sortedPoints.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+            int pointCount = 0;
             for (Map.Entry<String, Integer> entry : sortedPoints) {
+                pointCount++;
                 pointsInfo.append("<@").append(entry.getKey()).append("> - ").append(entry.getValue()).append(" pts\n");
-                if (pointsInfo.length() > 1000) break;
+                if (pointCount >= 15) break;
             }
             embed.addField("📊 Points", pointsInfo.toString(), false);
         }

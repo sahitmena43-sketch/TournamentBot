@@ -90,6 +90,9 @@ public class Tournament {
         }
     }
     
+    /**
+     * ✅ Gjeneron grupet duke përfshirë TË GJITHË lojtarët
+     */
     public void generateGroups() {
         groups.clear();
         points.clear();
@@ -98,19 +101,41 @@ public class Tournament {
         List<Player> playerList = new ArrayList<>(players.values());
         Collections.shuffle(playerList);
         
-        int numGroups = Math.min(4, Math.max(2, playerList.size() / 2));
-        int playersPerGroup = Math.max(2, playerList.size() / numGroups);
-        String[] groupNames = {"A", "B", "C", "D"};
+        int totalPlayers = playerList.size();
         
-        for (int g = 0; g < Math.min(numGroups, groupNames.length); g++) {
+        // ✅ Përcakto numrin e grupeve bazuar në numrin e lojtarëve
+        int numGroups;
+        if (totalPlayers <= 4) {
+            numGroups = 1;
+        } else if (totalPlayers <= 8) {
+            numGroups = 2;
+        } else if (totalPlayers <= 12) {
+            numGroups = 3;
+        } else {
+            numGroups = 4;
+        }
+        
+        // ✅ Sigurohu që secili grup të ketë të paktën 2 lojtarë
+        while (totalPlayers / numGroups < 2 && numGroups > 1) {
+            numGroups--;
+        }
+        
+        int playersPerGroup = (int) Math.ceil((double) totalPlayers / numGroups);
+        
+        String[] groupNames = {"A", "B", "C", "D", "E", "F"};
+        int playerIndex = 0;
+        
+        for (int g = 0; g < numGroups && playerIndex < totalPlayers; g++) {
             String groupName = groupNames[g];
             List<Player> groupPlayers = new ArrayList<>();
-            int start = g * playersPerGroup;
-            int end = Math.min((g + 1) * playersPerGroup, playerList.size());
-            for (int i = start; i < end; i++) {
-                groupPlayers.add(playerList.get(i));
-                points.put(playerList.get(i).getUserId(), 0);
+            
+            for (int i = 0; i < playersPerGroup && playerIndex < totalPlayers; i++) {
+                Player p = playerList.get(playerIndex);
+                groupPlayers.add(p);
+                points.put(p.getUserId(), 0);
+                playerIndex++;
             }
+            
             if (!groupPlayers.isEmpty()) {
                 groups.put(groupName, groupPlayers);
             }
@@ -298,24 +323,30 @@ public class Tournament {
     }
     
     public String getGroupStandings() {
-        if (!tournamentType.equals("FOOTBALL") || groups.isEmpty()) return "";
+        if (!tournamentType.equals("FOOTBALL") || groups.isEmpty()) return "Groups not generated yet.";
+        
         StringBuilder sb = new StringBuilder();
         sb.append("**🏆 Group Standings:**\n\n");
+        
         for (Map.Entry<String, List<Player>> entry : groups.entrySet()) {
             String groupName = entry.getKey();
             List<Player> groupPlayers = entry.getValue();
+            
             sb.append("**Group ").append(groupName).append("**\n");
             sb.append("```\n");
             sb.append(String.format("%-20s %-8s %-8s %-8s %-8s\n", "Player", "P", "W", "D", "L"));
             sb.append("----------------------------------------\n");
+            
             groupPlayers.sort((p1, p2) -> {
                 int pts1 = points.getOrDefault(p1.getUserId(), 0);
                 int pts2 = points.getOrDefault(p2.getUserId(), 0);
                 return Integer.compare(pts2, pts1);
             });
+            
             for (Player p : groupPlayers) {
                 int pts = points.getOrDefault(p.getUserId(), 0);
-                sb.append(String.format("%-20s %-8d %-8d %-8d %-8d\n", p.getUsername(), pts, p.getWins(), p.getDraws(), p.getLosses()));
+                sb.append(String.format("%-20s %-8d %-8d %-8d %-8d\n", 
+                    p.getUsername(), pts, p.getWins(), p.getDraws(), p.getLosses()));
             }
             sb.append("```\n\n");
         }
@@ -335,12 +366,16 @@ public class Tournament {
             return sb.toString();
         }
         
-        if (tournamentType.equals("FOOTBALL")) sb.append(getGroupStandings());
+        if (tournamentType.equals("FOOTBALL")) {
+            sb.append(getGroupStandings());
+        }
         
         if (!brackets.isEmpty()) {
             String sectionName = tournamentType.equals("FOOTBALL") ? "**📋 Group Matches:**\n\n" : "**📋 Matches:**\n\n";
             sb.append(sectionName);
-            for (Match m : brackets) sb.append(m.toString()).append("\n");
+            for (Match m : brackets) {
+                sb.append(m.toString()).append("\n");
+            }
         }
         
         if (!knockoutMatches.isEmpty()) {
@@ -354,12 +389,15 @@ public class Tournament {
                 default: stageName = "🏅 Knockout Stage";
             }
             sb.append("\n**").append(stageName).append("**\n\n");
-            for (Match m : knockoutMatches) sb.append(m.toString()).append("\n");
+            for (Match m : knockoutMatches) {
+                sb.append(m.toString()).append("\n");
+            }
         }
         
         if (winnerId != null && status.equals("FINISHED")) {
             sb.append("\n**🏆 CHAMPION: <@").append(winnerId).append(">** 🎉\n");
         }
+        
         return sb.toString();
     }
     
@@ -377,13 +415,17 @@ public class Tournament {
         
         sb.append("**📋 Matches:**\n\n");
         for (Match m : brackets) {
-            if (m.isFinished()) sb.append(m.toString()).append("\n");
+            if (m.isFinished()) {
+                sb.append(m.toString()).append("\n");
+            }
         }
         
         if (!knockoutMatches.isEmpty()) {
             sb.append("\n**📋 Knockout Matches:**\n\n");
             for (Match m : knockoutMatches) {
-                if (m.isFinished()) sb.append(m.toString()).append("\n");
+                if (m.isFinished()) {
+                    sb.append(m.toString()).append("\n");
+                }
             }
         }
         
@@ -403,7 +445,9 @@ public class Tournament {
         sb.append("Status: ").append(status).append("\n");
         sb.append("Admin: <@").append(adminId).append(">\n\n");
         
-        if (tournamentType.equals("FOOTBALL") && !groups.isEmpty()) sb.append(getGroupStandings());
+        if (tournamentType.equals("FOOTBALL") && !groups.isEmpty()) {
+            sb.append(getGroupStandings());
+        }
         
         sb.append("\n**👤 Players:**\n");
         int i = 1;
@@ -416,6 +460,7 @@ public class Tournament {
             }
             sb.append("\n");
         }
+        
         if (winnerId != null && status.equals("FINISHED")) {
             sb.append("\n**🏆 CHAMPION: <@").append(winnerId).append(">** 🎉\n");
         }

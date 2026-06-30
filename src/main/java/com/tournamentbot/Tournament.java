@@ -91,7 +91,7 @@ public class Tournament {
     }
     
     /**
-     * ✅ Gjeneron grupet duke përfshirë TË GJITHË lojtarët
+     * ✅ Shpërndan të gjithë lojtarët në 4 grupe sa më barabar
      */
     public void generateGroups() {
         groups.clear();
@@ -101,44 +101,25 @@ public class Tournament {
         List<Player> playerList = new ArrayList<>(players.values());
         Collections.shuffle(playerList);
         
-        int totalPlayers = playerList.size();
+        int total = playerList.size();
         
-        // ✅ Përcakto numrin e grupeve bazuar në numrin e lojtarëve
-        int numGroups;
-        if (totalPlayers <= 4) {
-            numGroups = 1;
-        } else if (totalPlayers <= 8) {
-            numGroups = 2;
-        } else if (totalPlayers <= 12) {
-            numGroups = 3;
-        } else {
-            numGroups = 4;
-        }
+        // ✅ 4 grupe: A, B, C, D
+        String[] groupNames = {"A", "B", "C", "D"};
+        int groupsCount = 4;
         
-        // ✅ Sigurohu që secili grup të ketë të paktën 2 lojtarë
-        while (totalPlayers / numGroups < 2 && numGroups > 1) {
-            numGroups--;
-        }
+        // ✅ Sa lojtarë për grup (rrumbullakoset lart)
+        int perGroup = (int) Math.ceil((double) total / groupsCount);
         
-        int playersPerGroup = (int) Math.ceil((double) totalPlayers / numGroups);
-        
-        String[] groupNames = {"A", "B", "C", "D", "E", "F"};
-        int playerIndex = 0;
-        
-        for (int g = 0; g < numGroups && playerIndex < totalPlayers; g++) {
-            String groupName = groupNames[g];
+        int index = 0;
+        for (int g = 0; g < groupsCount && index < total; g++) {
             List<Player> groupPlayers = new ArrayList<>();
-            
-            for (int i = 0; i < playersPerGroup && playerIndex < totalPlayers; i++) {
-                Player p = playerList.get(playerIndex);
+            for (int i = 0; i < perGroup && index < total; i++) {
+                Player p = playerList.get(index);
                 groupPlayers.add(p);
                 points.put(p.getUserId(), 0);
-                playerIndex++;
+                index++;
             }
-            
-            if (!groupPlayers.isEmpty()) {
-                groups.put(groupName, groupPlayers);
-            }
+            groups.put(groupNames[g], groupPlayers);
         }
     }
     

@@ -20,16 +20,19 @@ public class Tournament {
     private String winnerId;
     private String tournamentType;
     
+    // ✅ Lojërat me grupe (FC Mobile, FIFA, etj.)
     private static final Set<String> FOOTBALL_GAMES = new HashSet<>(Arrays.asList(
-        "Dream League Soccer 2026",
-        "DLS",
         "FC Mobile",
         "FIFA",
         "eFootball",
         "PES",
-        "Pro Evolution Soccer",
-        "Football",
-        "Soccer"
+        "Pro Evolution Soccer"
+    ));
+    
+    // ✅ Dream League Soccer 2026 - PA GRUPE
+    private static final Set<String> NO_GROUPS_GAMES = new HashSet<>(Arrays.asList(
+        "Dream League Soccer 2026",
+        "DLS"
     ));
     
     private static final Set<String> BATTLE_ROYALE_GAMES = new HashSet<>(Arrays.asList(
@@ -65,6 +68,12 @@ public class Tournament {
     }
     
     private String determineTournamentType(String game) {
+        // ✅ Dream League Soccer 2026 - kthehet si "GENERAL" (pa grupe)
+        for (String noGroupGame : NO_GROUPS_GAMES) {
+            if (game.equalsIgnoreCase(noGroupGame) || game.toLowerCase().contains(noGroupGame.toLowerCase())) {
+                return "GENERAL";
+            }
+        }
         for (String footballGame : FOOTBALL_GAMES) {
             if (game.equalsIgnoreCase(footballGame) || game.toLowerCase().contains(footballGame.toLowerCase())) {
                 return "FOOTBALL";
@@ -91,7 +100,7 @@ public class Tournament {
     }
     
     /**
-     * ✅ Shpërndan të gjithë lojtarët në 4 grupe sa më barabar
+     * ✅ Gjeneron grupe VETËM për FC Mobile
      */
     public void generateGroups() {
         groups.clear();
@@ -103,11 +112,8 @@ public class Tournament {
         
         int total = playerList.size();
         
-        // ✅ 4 grupe: A, B, C, D
         String[] groupNames = {"A", "B", "C", "D"};
         int groupsCount = 4;
-        
-        // ✅ Sa lojtarë për grup (rrumbullakoset lart)
         int perGroup = (int) Math.ceil((double) total / groupsCount);
         
         int index = 0;
@@ -129,11 +135,15 @@ public class Tournament {
         if (p != null) p.setPoints(p.getPoints() + pointsToAdd);
     }
     
+    /**
+     * ✅ Gjeneron ndeshjet - pa grupe për Dream League Soccer 2026
+     */
     public void generateBrackets() {
         brackets.clear();
         knockoutMatches.clear();
         
         if (tournamentType.equals("FOOTBALL")) {
+            // ✅ FC Mobile - ka grupe
             generateGroups();
             for (Map.Entry<String, List<Player>> entry : groups.entrySet()) {
                 String groupName = entry.getKey();
@@ -146,20 +156,54 @@ public class Tournament {
                 }
             }
         } else {
+            // ✅ Dream League Soccer 2026 - ELIMINIM DIREKT (pa grupe)
             List<Player> playerList = new ArrayList<>(players.values());
             Collections.shuffle(playerList);
+            
+            int totalPlayers = playerList.size();
+            
+            // ✅ Gjej fuqinë më të afërt të 2 (8, 16, 32, etj.)
+            int nextPowerOfTwo = 1;
+            while (nextPowerOfTwo < totalPlayers) {
+                nextPowerOfTwo *= 2;
+            }
+            
+            // ✅ Shto lojtarët "bye" (kalojnë direkt)
+            while (playerList.size() < nextPowerOfTwo) {
+                playerList.add(null);
+            }
+            
+            // ✅ Krijo ndeshjet e para (Round of 16 ose më pak)
             int matchId = 1;
-            for (int i = 0; i < playerList.size() - 1; i += 2) {
+            List<Match> currentRound = new ArrayList<>();
+            
+            for (int i = 0; i < playerList.size(); i += 2) {
                 Player p1 = playerList.get(i);
                 Player p2 = (i + 1 < playerList.size()) ? playerList.get(i + 1) : null;
+                
                 Match m = new Match(matchId++, p1, p2, "Knockout");
-                if (p2 == null) m.setBye(true);
-                brackets.add(m);
+                if (p1 == null || p2 == null) {
+                    m.setBye(true);
+                    if (p1 != null) {
+                        m.setScore(1, 0);
+                    } else if (p2 != null) {
+                        m.setScore(0, 1);
+                    }
+                }
+                currentRound.add(m);
+            }
+            
+            brackets.addAll(currentRound);
+            
+            // ✅ Nëse ka më shumë se 2 lojtarë, kalojmë në knockout
+            if (currentRound.size() > 1) {
+                generateKnockoutStage();
             }
         }
     }
     
     public boolean setMatchScore(int matchId, int score1, int score2) {
+        // Kontrollo nëse është ndeshje e grupeve
         for (Match m : brackets) {
             if (m.getId() == matchId) {
                 m.setScore(score1, score2);
@@ -183,6 +227,8 @@ public class Tournament {
                 return true;
             }
         }
+        
+        // Kontrollo nëse është ndeshje knockout
         for (Match m : knockoutMatches) {
             if (m.getId() == matchId) {
                 m.setScore(score1, score2);
@@ -190,29 +236,39 @@ public class Tournament {
                 return true;
             }
         }
+        
         return false;
     }
     
     private void checkAllMatchesComplete() {
         for (Match m : brackets) {
-            if (!m.isFinished()) return;
+            if (!m.isFinished()) {
+                return;
+            }
         }
         generateKnockoutStage();
     }
     
     private void checkGroupStageComplete() {
         for (Match m : brackets) {
-            if (!m.isFinished()) return;
+            if (!m.isFinished()) {
+                return;
+            }
         }
         generateKnockoutStage();
     }
     
+    /**
+     * ✅ Gjeneron fazën e eliminimit direkt (Çerekfinale, Gjysmëfinale, Finale)
+     */
     private void generateKnockoutStage() {
         knockoutMatches.clear();
         knockoutStage = "ROUND_16";
+        
         List<Player> sortedPlayers;
         
         if (tournamentType.equals("FOOTBALL")) {
+            // ✅ Rendit sipas pikëve për FC Mobile
             sortedPlayers = new ArrayList<>(players.values());
             sortedPlayers.sort((p1, p2) -> {
                 int pts1 = points.getOrDefault(p1.getUserId(), 0);
@@ -220,6 +276,7 @@ public class Tournament {
                 return Integer.compare(pts2, pts1);
             });
         } else {
+            // ✅ Për Dream League Soccer 2026 - fituesit e ndeshjeve kalojnë
             sortedPlayers = new ArrayList<>();
             for (Match m : brackets) {
                 if (m.isFinished()) {
@@ -229,38 +286,70 @@ public class Tournament {
                         sortedPlayers.add(m.getPlayer2());
                     } else if (m.isBye() && m.getPlayer1() != null) {
                         sortedPlayers.add(m.getPlayer1());
+                    } else if (m.isBye() && m.getPlayer2() != null) {
+                        sortedPlayers.add(m.getPlayer2());
                     }
                 }
             }
         }
         
         int numPlayers = sortedPlayers.size();
+        
+        // ✅ Nëse kemi 8 lojtarë -> Çerekfinale
+        // ✅ Nëse kemi 4 lojtarë -> Gjysmëfinale
+        // ✅ Nëse kemi 2 lojtarë -> Finale
+        
         int nextPowerOfTwo = 1;
-        while (nextPowerOfTwo < numPlayers) nextPowerOfTwo *= 2;
-        while (sortedPlayers.size() < nextPowerOfTwo) sortedPlayers.add(null);
+        while (nextPowerOfTwo < numPlayers) {
+            nextPowerOfTwo *= 2;
+        }
+        
+        while (sortedPlayers.size() < nextPowerOfTwo) {
+            sortedPlayers.add(null);
+        }
         
         int matchId = brackets.size() + 1;
+        List<Match> nextRound = new ArrayList<>();
+        
         for (int i = 0; i < sortedPlayers.size() / 2; i++) {
             Player p1 = sortedPlayers.get(i);
             Player p2 = sortedPlayers.get(sortedPlayers.size() - 1 - i);
-            if (p1 == null && p2 == null) continue;
+            
+            if (p1 == null && p2 == null) {
+                continue;
+            }
+            
             Match m = new Match(matchId++, p1, p2, "Knockout");
             if (p1 == null || p2 == null) {
                 m.setBye(true);
-                if (p1 != null) m.setScore(1, 0);
-                else if (p2 != null) m.setScore(0, 1);
+                if (p1 != null) {
+                    m.setScore(1, 0);
+                } else if (p2 != null) {
+                    m.setScore(0, 1);
+                }
             }
-            knockoutMatches.add(m);
+            nextRound.add(m);
         }
         
-        if (knockoutMatches.size() <= 4) knockoutStage = "QUARTER";
-        else if (knockoutMatches.size() <= 2) knockoutStage = "SEMI";
-        else if (knockoutMatches.size() <= 1) knockoutStage = "FINAL";
+        knockoutMatches = nextRound;
+        
+        // ✅ Përcakto fazën
+        if (knockoutMatches.size() <= 1) {
+            knockoutStage = "FINAL";
+        } else if (knockoutMatches.size() <= 2) {
+            knockoutStage = "SEMI";
+        } else if (knockoutMatches.size() <= 4) {
+            knockoutStage = "QUARTER";
+        } else {
+            knockoutStage = "ROUND_16";
+        }
     }
     
     private void checkKnockoutStageComplete() {
         for (Match m : knockoutMatches) {
-            if (!m.isFinished()) return;
+            if (!m.isFinished()) {
+                return;
+            }
         }
         
         List<Player> winners = new ArrayList<>();
@@ -279,19 +368,29 @@ public class Tournament {
         
         int matchId = brackets.size() + knockoutMatches.size() + 1;
         List<Match> nextRound = new ArrayList<>();
+        
         for (int i = 0; i < winners.size() - 1; i += 2) {
             Player p1 = winners.get(i);
             Player p2 = (i + 1 < winners.size()) ? winners.get(i + 1) : null;
             Match m = new Match(matchId++, p1, p2, "Knockout");
-            if (p2 == null) { m.setBye(true); m.setScore(1, 0); }
+            if (p2 == null) {
+                m.setBye(true);
+                m.setScore(1, 0);
+            }
             nextRound.add(m);
         }
+        
         knockoutMatches = nextRound;
         
-        if (knockoutMatches.size() <= 1) knockoutStage = "FINAL";
-        else if (knockoutMatches.size() <= 2) knockoutStage = "SEMI";
-        else if (knockoutMatches.size() <= 4) knockoutStage = "QUARTER";
-        else knockoutStage = "ROUND_16";
+        if (knockoutMatches.size() <= 1) {
+            knockoutStage = "FINAL";
+        } else if (knockoutMatches.size() <= 2) {
+            knockoutStage = "SEMI";
+        } else if (knockoutMatches.size() <= 4) {
+            knockoutStage = "QUARTER";
+        } else {
+            knockoutStage = "ROUND_16";
+        }
     }
     
     private void finishTournament(Player winner) {

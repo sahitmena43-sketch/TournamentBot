@@ -328,9 +328,6 @@ public class TournamentBot extends ListenerAdapter {
                    "\n\nUse /bracket to see matches.\nUse /setscore to set results.").queue();
     }
     
-    /**
-     * ✅ /bracket - I KORRIGJUAR (ndarja në pjesë për të shmangur limitin)
-     */
     private void showBracket(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
@@ -368,7 +365,6 @@ public class TournamentBot extends ListenerAdapter {
         embed.addField("📊 Status", foundTournament.getStatus(), true);
         embed.addField("👥 Players", String.valueOf(foundTournament.getPlayers().size()), true);
         
-        // ✅ Grupet
         if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getGroups().isEmpty()) {
             StringBuilder groupsInfo = new StringBuilder();
             int groupCount = 0;
@@ -395,7 +391,6 @@ public class TournamentBot extends ListenerAdapter {
             }
         }
         
-        // ✅ Ndeshjet e ndara në pjesë
         if (!foundTournament.getBrackets().isEmpty()) {
             StringBuilder matches = new StringBuilder();
             int matchCount = 0;
@@ -418,7 +413,6 @@ public class TournamentBot extends ListenerAdapter {
             }
         }
         
-        // ✅ Knockout matches të ndara në pjesë
         if (!foundTournament.getKnockoutMatches().isEmpty()) {
             StringBuilder knockout = new StringBuilder();
             int matchCount = 0;
@@ -448,9 +442,6 @@ public class TournamentBot extends ListenerAdapter {
         event.replyEmbeds(embed.build()).queue();
     }
     
-    /**
-     * ✅ /results - I KORRIGJUAR (renditja nga më i madhi tek më i vogli)
-     */
     private void showResults(SlashCommandInteractionEvent event, String guildId) {
         String userId = event.getUser().getId();
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);

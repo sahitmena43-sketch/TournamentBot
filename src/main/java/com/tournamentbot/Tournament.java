@@ -20,7 +20,7 @@ public class Tournament {
     private String winnerId;
     private String tournamentType;
     
-    // ✅ Lojërat me grupe (FC Mobile, FIFA, etj.)
+    // ✅ FC Mobile ka grupe, Dream League Soccer 2026 pa grupe
     private static final Set<String> FOOTBALL_GAMES = new HashSet<>(Arrays.asList(
         "FC Mobile",
         "FIFA",
@@ -29,7 +29,6 @@ public class Tournament {
         "Pro Evolution Soccer"
     ));
     
-    // ✅ Dream League Soccer 2026 - PA GRUPE
     private static final Set<String> NO_GROUPS_GAMES = new HashSet<>(Arrays.asList(
         "Dream League Soccer 2026",
         "DLS"
@@ -68,7 +67,7 @@ public class Tournament {
     }
     
     private String determineTournamentType(String game) {
-        // ✅ Dream League Soccer 2026 - kthehet si "GENERAL" (pa grupe)
+        // ✅ Dream League Soccer 2026 - pa grupe
         for (String noGroupGame : NO_GROUPS_GAMES) {
             if (game.equalsIgnoreCase(noGroupGame) || game.toLowerCase().contains(noGroupGame.toLowerCase())) {
                 return "GENERAL";
@@ -99,9 +98,6 @@ public class Tournament {
         }
     }
     
-    /**
-     * ✅ Gjeneron grupe VETËM për FC Mobile
-     */
     public void generateGroups() {
         groups.clear();
         points.clear();
@@ -135,15 +131,11 @@ public class Tournament {
         if (p != null) p.setPoints(p.getPoints() + pointsToAdd);
     }
     
-    /**
-     * ✅ Gjeneron ndeshjet - pa grupe për Dream League Soccer 2026
-     */
     public void generateBrackets() {
         brackets.clear();
         knockoutMatches.clear();
         
         if (tournamentType.equals("FOOTBALL")) {
-            // ✅ FC Mobile - ka grupe
             generateGroups();
             for (Map.Entry<String, List<Player>> entry : groups.entrySet()) {
                 String groupName = entry.getKey();
@@ -156,24 +148,21 @@ public class Tournament {
                 }
             }
         } else {
-            // ✅ Dream League Soccer 2026 - ELIMINIM DIREKT (pa grupe)
+            // ✅ Dream League Soccer 2026 - pa grupe
             List<Player> playerList = new ArrayList<>(players.values());
             Collections.shuffle(playerList);
             
             int totalPlayers = playerList.size();
             
-            // ✅ Gjej fuqinë më të afërt të 2 (8, 16, 32, etj.)
             int nextPowerOfTwo = 1;
             while (nextPowerOfTwo < totalPlayers) {
                 nextPowerOfTwo *= 2;
             }
             
-            // ✅ Shto lojtarët "bye" (kalojnë direkt)
             while (playerList.size() < nextPowerOfTwo) {
                 playerList.add(null);
             }
             
-            // ✅ Krijo ndeshjet e para (Round of 16 ose më pak)
             int matchId = 1;
             List<Match> currentRound = new ArrayList<>();
             
@@ -195,7 +184,6 @@ public class Tournament {
             
             brackets.addAll(currentRound);
             
-            // ✅ Nëse ka më shumë se 2 lojtarë, kalojmë në knockout
             if (currentRound.size() > 1) {
                 generateKnockoutStage();
             }
@@ -203,7 +191,6 @@ public class Tournament {
     }
     
     public boolean setMatchScore(int matchId, int score1, int score2) {
-        // Kontrollo nëse është ndeshje e grupeve
         for (Match m : brackets) {
             if (m.getId() == matchId) {
                 m.setScore(score1, score2);
@@ -227,8 +214,6 @@ public class Tournament {
                 return true;
             }
         }
-        
-        // Kontrollo nëse është ndeshje knockout
         for (Match m : knockoutMatches) {
             if (m.getId() == matchId) {
                 m.setScore(score1, score2);
@@ -236,7 +221,6 @@ public class Tournament {
                 return true;
             }
         }
-        
         return false;
     }
     
@@ -258,9 +242,6 @@ public class Tournament {
         generateKnockoutStage();
     }
     
-    /**
-     * ✅ Gjeneron fazën e eliminimit direkt (Çerekfinale, Gjysmëfinale, Finale)
-     */
     private void generateKnockoutStage() {
         knockoutMatches.clear();
         knockoutStage = "ROUND_16";
@@ -268,7 +249,6 @@ public class Tournament {
         List<Player> sortedPlayers;
         
         if (tournamentType.equals("FOOTBALL")) {
-            // ✅ Rendit sipas pikëve për FC Mobile
             sortedPlayers = new ArrayList<>(players.values());
             sortedPlayers.sort((p1, p2) -> {
                 int pts1 = points.getOrDefault(p1.getUserId(), 0);
@@ -276,7 +256,6 @@ public class Tournament {
                 return Integer.compare(pts2, pts1);
             });
         } else {
-            // ✅ Për Dream League Soccer 2026 - fituesit e ndeshjeve kalojnë
             sortedPlayers = new ArrayList<>();
             for (Match m : brackets) {
                 if (m.isFinished()) {
@@ -294,10 +273,6 @@ public class Tournament {
         }
         
         int numPlayers = sortedPlayers.size();
-        
-        // ✅ Nëse kemi 8 lojtarë -> Çerekfinale
-        // ✅ Nëse kemi 4 lojtarë -> Gjysmëfinale
-        // ✅ Nëse kemi 2 lojtarë -> Finale
         
         int nextPowerOfTwo = 1;
         while (nextPowerOfTwo < numPlayers) {
@@ -333,7 +308,6 @@ public class Tournament {
         
         knockoutMatches = nextRound;
         
-        // ✅ Përcakto fazën
         if (knockoutMatches.size() <= 1) {
             knockoutStage = "FINAL";
         } else if (knockoutMatches.size() <= 2) {
@@ -426,7 +400,7 @@ public class Tournament {
             for (Player p : groupPlayers) {
                 int pts = points.getOrDefault(p.getUserId(), 0);
                 sb.append(String.format("%-20s %-8d %-8d %-8d %-8d\n", 
-                    p.getUsername(), pts, p.getWins(), p.getDraws(), p.getLosses()));
+                    "<@" + p.getUserId() + ">", pts, p.getWins(), p.getDraws(), p.getLosses()));
             }
             sb.append("```\n\n");
         }

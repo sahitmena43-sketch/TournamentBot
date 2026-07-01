@@ -20,18 +20,17 @@ public class Tournament {
     private String winnerId;
     private String tournamentType;
     
-    // ✅ FC Mobile ka grupe, Dream League Soccer 2026 pa grupe
+    // ✅ Të gjitha lojërat e futbollit kanë grupe (DLS + FC Mobile + të tjera)
     private static final Set<String> FOOTBALL_GAMES = new HashSet<>(Arrays.asList(
+        "Dream League Soccer 2026",
+        "DLS",
         "FC Mobile",
         "FIFA",
         "eFootball",
         "PES",
-        "Pro Evolution Soccer"
-    ));
-    
-    private static final Set<String> NO_GROUPS_GAMES = new HashSet<>(Arrays.asList(
-        "Dream League Soccer 2026",
-        "DLS"
+        "Pro Evolution Soccer",
+        "Football",
+        "Soccer"
     ));
     
     private static final Set<String> BATTLE_ROYALE_GAMES = new HashSet<>(Arrays.asList(
@@ -67,12 +66,6 @@ public class Tournament {
     }
     
     private String determineTournamentType(String game) {
-        // ✅ Dream League Soccer 2026 - pa grupe
-        for (String noGroupGame : NO_GROUPS_GAMES) {
-            if (game.equalsIgnoreCase(noGroupGame) || game.toLowerCase().contains(noGroupGame.toLowerCase())) {
-                return "GENERAL";
-            }
-        }
         for (String footballGame : FOOTBALL_GAMES) {
             if (game.equalsIgnoreCase(footballGame) || game.toLowerCase().contains(footballGame.toLowerCase())) {
                 return "FOOTBALL";
@@ -98,6 +91,9 @@ public class Tournament {
         }
     }
     
+    /**
+     * ✅ Gjeneron grupe dinamike sipas numrit të lojtarëve
+     */
     public void generateGroups() {
         groups.clear();
         points.clear();
@@ -108,20 +104,86 @@ public class Tournament {
         
         int total = playerList.size();
         
-        String[] groupNames = {"A", "B", "C", "D"};
-        int groupsCount = 4;
-        int perGroup = (int) Math.ceil((double) total / groupsCount);
+        // ✅ Përcakto numrin e grupeve dhe lojtarët për grup
+        int numGroups;
+        int[] playersPerGroup;
         
+        switch (total) {
+            case 6:
+                numGroups = 2;
+                playersPerGroup = new int[]{3, 3};
+                break;
+            case 8:
+                numGroups = 2;
+                playersPerGroup = new int[]{4, 4};
+                break;
+            case 10:
+                numGroups = 2;
+                playersPerGroup = new int[]{5, 5};
+                break;
+            case 12:
+                numGroups = 2;
+                playersPerGroup = new int[]{6, 6};
+                break;
+            case 13:
+                numGroups = 4;
+                playersPerGroup = new int[]{4, 3, 3, 3};
+                break;
+            case 16:
+                numGroups = 2;
+                playersPerGroup = new int[]{8, 8};
+                break;
+            default:
+                // ✅ Për numra të tjerë, shpërnda sa më barabar
+                if (total <= 4) {
+                    numGroups = 1;
+                    playersPerGroup = new int[]{total};
+                } else if (total <= 8) {
+                    numGroups = 2;
+                    int base = total / 2;
+                    int extra = total % 2;
+                    playersPerGroup = new int[]{base + extra, base};
+                } else if (total <= 12) {
+                    numGroups = 3;
+                    int base = total / 3;
+                    int extra = total % 3;
+                    if (extra == 0) {
+                        playersPerGroup = new int[]{base, base, base};
+                    } else if (extra == 1) {
+                        playersPerGroup = new int[]{base + 1, base, base};
+                    } else {
+                        playersPerGroup = new int[]{base + 1, base + 1, base};
+                    }
+                } else {
+                    numGroups = 4;
+                    int base = total / 4;
+                    int extra = total % 4;
+                    playersPerGroup = new int[4];
+                    for (int i = 0; i < 4; i++) {
+                        playersPerGroup[i] = base + (i < extra ? 1 : 0);
+                    }
+                }
+                break;
+        }
+        
+        String[] groupNames = {"A", "B", "C", "D", "E", "F"};
         int index = 0;
-        for (int g = 0; g < groupsCount && index < total; g++) {
+        
+        for (int g = 0; g < numGroups && index < total; g++) {
+            String groupName = groupNames[g];
             List<Player> groupPlayers = new ArrayList<>();
-            for (int i = 0; i < perGroup && index < total; i++) {
+            int count = playersPerGroup[g];
+            
+            for (int i = 0; i < count && index < total; i++) {
                 Player p = playerList.get(index);
                 groupPlayers.add(p);
                 points.put(p.getUserId(), 0);
                 index++;
             }
-            groups.put(groupNames[g], groupPlayers);
+            
+            if (!groupPlayers.isEmpty()) {
+                groups.put(groupName, groupPlayers);
+            }
         }
     }
     
@@ -148,44 +210,15 @@ public class Tournament {
                 }
             }
         } else {
-            // ✅ Dream League Soccer 2026 - pa grupe
             List<Player> playerList = new ArrayList<>(players.values());
             Collections.shuffle(playerList);
-            
-            int totalPlayers = playerList.size();
-            
-            int nextPowerOfTwo = 1;
-            while (nextPowerOfTwo < totalPlayers) {
-                nextPowerOfTwo *= 2;
-            }
-            
-            while (playerList.size() < nextPowerOfTwo) {
-                playerList.add(null);
-            }
-            
             int matchId = 1;
-            List<Match> currentRound = new ArrayList<>();
-            
-            for (int i = 0; i < playerList.size(); i += 2) {
+            for (int i = 0; i < playerList.size() - 1; i += 2) {
                 Player p1 = playerList.get(i);
                 Player p2 = (i + 1 < playerList.size()) ? playerList.get(i + 1) : null;
-                
                 Match m = new Match(matchId++, p1, p2, "Knockout");
-                if (p1 == null || p2 == null) {
-                    m.setBye(true);
-                    if (p1 != null) {
-                        m.setScore(1, 0);
-                    } else if (p2 != null) {
-                        m.setScore(0, 1);
-                    }
-                }
-                currentRound.add(m);
-            }
-            
-            brackets.addAll(currentRound);
-            
-            if (currentRound.size() > 1) {
-                generateKnockoutStage();
+                if (p2 == null) m.setBye(true);
+                brackets.add(m);
             }
         }
     }

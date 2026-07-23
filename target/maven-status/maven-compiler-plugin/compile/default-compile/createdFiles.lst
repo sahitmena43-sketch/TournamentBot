@@ -1,0 +1,8 @@
+com\tournamentbot\Player.class
+com\tournamentbot\Tournament.class
+com\tournamentbot\MessageListener.class
+com\tournamentbot\DatabaseManager.class
+com\tournamentbot\TournamentBot.class
+com\tournamentbot\ClearCommands.class
+com\tournamentbot\UserState.class
+com\tournamentbot\Match.class

@@ -1,23 +1,17 @@
-# Përdor imazhin e saktë
-FROM eclipse-temurin:17-jdk-alpine
+FROM maven:3.9-eclipse-temurin-17-alpine
 
-# Vendos direktorinë e punës
 WORKDIR /app
 
-# Kopjo pom.xml dhe shkarko dependency-t
+# Kopjo pom.xml dhe buildo
 COPY pom.xml .
-RUN apk add --no-cache maven
-RUN mvn dependency:go-offline
-
-# Kopjo kodin dhe buildo
 COPY src/ src/
+
+# Build (pa dependency:go-offline)
 RUN mvn clean package
 
-# Kopjo JAR-in final
+# Kopjo JAR-in
 COPY target/TournamentBot-1.0-SNAPSHOT.jar app.jar
 
-# Porti për health check
 EXPOSE 8080
 
-# Starto bot-in
 ENTRYPOINT ["java", "-jar", "app.jar"]

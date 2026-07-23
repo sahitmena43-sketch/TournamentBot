@@ -9,6 +9,7 @@ public class DatabaseManager {
     
     public static void connect() {
         try {
+            // ✅ SQLite - database lokale
             connection = DriverManager.getConnection("jdbc:sqlite:tournaments.db");
             createTables();
             System.out.println("✅ Database connected successfully!");
@@ -149,7 +150,7 @@ public class DatabaseManager {
                 saveMatch(guildId, tournamentId, m, matchId++, true);
             }
             
-            System.out.println("✅ Tournament saved: " + t.getName() + " (Server: " + guildId + ")");
+            System.out.println("✅ Tournament saved: " + t.getName());
             
         } catch (SQLException e) {
             System.err.println("❌ Error saving tournament: " + e.getMessage());
@@ -206,7 +207,7 @@ public class DatabaseManager {
                 
                 allTournaments.computeIfAbsent(guildId, k -> new ConcurrentHashMap<>())
                               .put(id, t);
-                System.out.println("✅ Tournament loaded: " + name + " (Server: " + guildId + ")");
+                System.out.println("✅ Tournament loaded: " + name);
             }
             
         } catch (SQLException e) {
@@ -311,7 +312,7 @@ public class DatabaseManager {
             stmt.setString(1, guildId);
             stmt.setString(2, tournamentId);
             stmt.executeUpdate();
-            System.out.println("✅ Tournament deleted from database: " + tournamentId + " (Server: " + guildId + ")");
+            System.out.println("✅ Tournament deleted from database: " + tournamentId);
         } catch (SQLException e) {
             System.err.println("❌ Error deleting tournament: " + e.getMessage());
         }

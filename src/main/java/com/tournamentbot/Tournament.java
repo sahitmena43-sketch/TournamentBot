@@ -20,7 +20,6 @@ public class Tournament {
     private String winnerId;
     private String tournamentType;
     
-    // ✅ Të gjitha lojërat e futbollit kanë grupe (DLS + FC Mobile + të tjera)
     private static final Set<String> FOOTBALL_GAMES = new HashSet<>(Arrays.asList(
         "Dream League Soccer 2026",
         "DLS",
@@ -91,9 +90,6 @@ public class Tournament {
         }
     }
     
-    /**
-     * ✅ Gjeneron grupe dinamike sipas numrit të lojtarëve
-     */
     public void generateGroups() {
         groups.clear();
         points.clear();
@@ -104,67 +100,23 @@ public class Tournament {
         
         int total = playerList.size();
         
-        // ✅ Përcakto numrin e grupeve dhe lojtarët për grup
         int numGroups;
-        int[] playersPerGroup;
-        
-        switch (total) {
-            case 6:
-                numGroups = 2;
-                playersPerGroup = new int[]{3, 3};
-                break;
-            case 8:
-                numGroups = 2;
-                playersPerGroup = new int[]{4, 4};
-                break;
-            case 10:
-                numGroups = 2;
-                playersPerGroup = new int[]{5, 5};
-                break;
-            case 12:
-                numGroups = 2;
-                playersPerGroup = new int[]{6, 6};
-                break;
-            case 13:
-                numGroups = 4;
-                playersPerGroup = new int[]{4, 3, 3, 3};
-                break;
-            case 16:
-                numGroups = 2;
-                playersPerGroup = new int[]{8, 8};
-                break;
-            default:
-                // ✅ Për numra të tjerë, shpërnda sa më barabar
-                if (total <= 4) {
-                    numGroups = 1;
-                    playersPerGroup = new int[]{total};
-                } else if (total <= 8) {
-                    numGroups = 2;
-                    int base = total / 2;
-                    int extra = total % 2;
-                    playersPerGroup = new int[]{base + extra, base};
-                } else if (total <= 12) {
-                    numGroups = 3;
-                    int base = total / 3;
-                    int extra = total % 3;
-                    if (extra == 0) {
-                        playersPerGroup = new int[]{base, base, base};
-                    } else if (extra == 1) {
-                        playersPerGroup = new int[]{base + 1, base, base};
-                    } else {
-                        playersPerGroup = new int[]{base + 1, base + 1, base};
-                    }
-                } else {
-                    numGroups = 4;
-                    int base = total / 4;
-                    int extra = total % 4;
-                    playersPerGroup = new int[4];
-                    for (int i = 0; i < 4; i++) {
-                        playersPerGroup[i] = base + (i < extra ? 1 : 0);
-                    }
-                }
-                break;
+        if (total <= 4) {
+            numGroups = 1;
+        } else if (total <= 8) {
+            numGroups = 2;
+        } else if (total <= 12) {
+            numGroups = 3;
+        } else {
+            numGroups = 4;
         }
+        
+        while (total / numGroups < 2 && numGroups > 1) {
+            numGroups--;
+        }
+        
+        int base = total / numGroups;
+        int extra = total % numGroups;
         
         String[] groupNames = {"A", "B", "C", "D", "E", "F"};
         int index = 0;
@@ -172,7 +124,7 @@ public class Tournament {
         for (int g = 0; g < numGroups && index < total; g++) {
             String groupName = groupNames[g];
             List<Player> groupPlayers = new ArrayList<>();
-            int count = playersPerGroup[g];
+            int count = base + (g < extra ? 1 : 0);
             
             for (int i = 0; i < count && index < total; i++) {
                 Player p = playerList.get(index);

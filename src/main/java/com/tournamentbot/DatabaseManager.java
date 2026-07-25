@@ -9,7 +9,6 @@ public class DatabaseManager {
     
     public static void connect() {
         try {
-            // ✅ SQLite - database lokale
             connection = DriverManager.getConnection("jdbc:sqlite:tournaments.db");
             createTables();
             System.out.println("✅ Database connected successfully!");

@@ -36,6 +36,9 @@ public class TournamentBot extends ListenerAdapter {
     
     public static void main(String[] args) {
         try {
+            System.setProperty("jda.core.pool.threads", "5");
+            System.setProperty("jda.core.pool.rate", "1");
+            
             DatabaseManager.connect();
             startHealthServer();
             
@@ -45,6 +48,7 @@ public class TournamentBot extends ListenerAdapter {
                         GatewayIntent.MESSAGE_CONTENT,
                         GatewayIntent.GUILD_MEMBERS
                     )
+                    .setEnableShutdownHook(false)
                     .addEventListeners(new TournamentBot())
                     .addEventListeners(new MessageListener())
                     .build();
@@ -142,6 +146,9 @@ public class TournamentBot extends ListenerAdapter {
         String command = event.getName();
         String guildId = event.getGuild().getId();
         
+        // ✅ Përgjigju menjëherë për të shmangur timeout
+        event.deferReply().queue();
+        
         switch (command) {
             case "help": sendHelp(event); break;
             case "newtournament": newTournament(event); break;
@@ -155,42 +162,34 @@ public class TournamentBot extends ListenerAdapter {
             case "addplayer": addPlayer(event, guildId); break;
             case "setscore": setScore(event, guildId); break;
             case "deletetournament": deleteTournament(event, guildId); break;
-            default: event.reply("Unknown command").queue(); break;
+            default: event.getHook().editOriginal("Unknown command").queue(); break;
         }
     }
     
     private void sendHelp(SlashCommandInteractionEvent event) {
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setTitle("📋 Tournament Bot Commands");
-        embed.setColor(Color.BLUE);
-        embed.setFooter("Tournament Bot", event.getJDA().getSelfUser().getAvatarUrl());
-        embed.setTimestamp(Instant.now());
-        
-        embed.addField("🔒 Server Admin Commands",
-                       "/newtournament - Create new tournament\n" +
-                       "/deletetournament - Delete tournament", false);
-        
-        embed.addField("👑 Tournament Admin Commands",
-                       "/starttournament - Start tournament\n" +
-                       "/addplayer @user - Add player\n" +
-                       "/setscore match_id score1 score2 - Set score", false);
-        
-        embed.addField("👥 Public Commands",
-                       "/join - Join tournament\n" +
-                       "/list - List tournaments in this server\n" +
-                       "/bracket - Show bracket\n" +
-                       "/results - Show results\n" +
-                       "/info - Tournament info\n" +
-                       "/leave - Leave tournament", false);
-        
-        event.replyEmbeds(embed.build()).queue();
+        String msg = "**Available Commands:**\n\n" +
+                     "**Server Admin Commands:**\n" +
+                     "/newtournament - Create new tournament\n" +
+                     "/deletetournament - Delete tournament\n\n" +
+                     "**Tournament Admin Commands:**\n" +
+                     "/starttournament - Start tournament\n" +
+                     "/addplayer @user - Add player\n" +
+                     "/setscore match_id score1 score2 - Set score\n\n" +
+                     "**Public Commands:**\n" +
+                     "/join - Join tournament\n" +
+                     "/list - List tournaments\n" +
+                     "/bracket - Show bracket\n" +
+                     "/results - Show results\n" +
+                     "/info - Tournament info\n" +
+                     "/leave - Leave tournament";
+        event.getHook().editOriginal(msg).queue();
     }
     
     private void newTournament(SlashCommandInteractionEvent event) {
         Member member = event.getMember();
         
         if (member == null || !member.hasPermission(Permission.ADMINISTRATOR)) {
-            event.reply("You don't have permission to use this command!\nThis command is only for Server Administrators.").queue();
+            event.getHook().editOriginal("You don't have permission to use this command!\nThis command is only for Server Administrators.").queue();
             return;
         }
         
@@ -206,7 +205,7 @@ public class TournamentBot extends ListenerAdapter {
         state.setChannelId(channelId);
         userStates.put(key, state);
         
-        event.reply("Create New Tournament\n\nType the tournament name in chat:\nExample: Free Fire Cup 2026").queue();
+        event.getHook().editOriginal("Create New Tournament\n\nType the tournament name in chat:\nExample: Free Fire Cup 2026").queue();
     }
     
     private void joinTournament(SlashCommandInteractionEvent event) {
@@ -214,7 +213,7 @@ public class TournamentBot extends ListenerAdapter {
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
         if (tournaments == null || tournaments.isEmpty()) {
-            event.reply("No active tournaments in this server.").queue();
+            event.getHook().editOriginal("No active tournaments in this server.").queue();
             return;
         }
         
@@ -232,12 +231,12 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (i == 1) {
-            event.reply("No tournaments waiting in this server.").queue();
+            event.getHook().editOriginal("No tournaments waiting in this server.").queue();
             return;
         }
         
         msg.append("\nType the tournament number in chat:");
-        event.reply(msg.toString()).queue();
+        event.getHook().editOriginal(msg.toString()).queue();
         
         String userId = event.getUser().getId();
         String channelId = event.getChannel().getId();
@@ -256,7 +255,7 @@ public class TournamentBot extends ListenerAdapter {
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
         if (tournaments == null || tournaments.isEmpty()) {
-            event.reply("No active tournaments in this server.").queue();
+            event.getHook().editOriginal("No active tournaments in this server.").queue();
             return;
         }
         
@@ -280,12 +279,17 @@ public class TournamentBot extends ListenerAdapter {
                        .append("/").append(t.getMaxPlayers()).append("\n")
                        .append("📊 **Status:** ").append(statusEmoji).append(" ").append(t.getStatus()).append("\n")
                        .append("👑 **Admin:** <@").append(t.getAdminId()).append(">\n\n");
+            
+            if (description.length() > 1500) {
+                description.append("... and more tournaments");
+                break;
+            }
         }
         
         embed.setDescription(description.toString());
         embed.addField("📌 Total Tournaments", String.valueOf(count), false);
         
-        event.replyEmbeds(embed.build()).queue();
+        event.getHook().editOriginalEmbeds(embed.build()).queue();
     }
     
     private void startTournament(SlashCommandInteractionEvent event, String guildId) {
@@ -293,7 +297,7 @@ public class TournamentBot extends ListenerAdapter {
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
         if (tournaments == null) {
-            event.reply("No tournaments in this server.").queue();
+            event.getHook().editOriginal("No tournaments in this server.").queue();
             return;
         }
         
@@ -310,12 +314,12 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (adminTournament == null) {
-            event.reply("You don't have permission to use this command!\nThis command is only for Tournament Administrators.").queue();
+            event.getHook().editOriginal("You don't have permission to use this command!\nThis command is only for Tournament Administrators.").queue();
             return;
         }
         
         if (adminTournament.getPlayers().size() < 2) {
-            event.reply("Need at least 2 players to start.\nCurrent players: " + adminTournament.getPlayers().size()).queue();
+            event.getHook().editOriginal("Need at least 2 players to start.\nCurrent players: " + adminTournament.getPlayers().size()).queue();
             return;
         }
         
@@ -323,7 +327,7 @@ public class TournamentBot extends ListenerAdapter {
         adminTournament.generateBrackets();
         DatabaseManager.saveTournament(guildId, tournamentId, adminTournament);
         
-        event.reply("Tournament started!\n\nName: " + adminTournament.getName() + 
+        event.getHook().editOriginal("Tournament started!\n\nName: " + adminTournament.getName() + 
                    "\nPlayers: " + adminTournament.getPlayers().size() + 
                    "\n\nUse /bracket to see matches.\nUse /setscore to set results.").queue();
     }
@@ -332,8 +336,8 @@ public class TournamentBot extends ListenerAdapter {
         String userId = event.getUser().getId();
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
-        if (tournaments == null) {
-            event.reply("No tournaments in this server.").queue();
+        if (tournaments == null || tournaments.isEmpty()) {
+            event.getHook().editOriginal("No tournaments in this server.").queue();
             return;
         }
         
@@ -346,12 +350,12 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (foundTournament == null) {
-            event.reply("You are not part of any tournament in this server.").queue();
+            event.getHook().editOriginal("You are not part of any tournament in this server.").queue();
             return;
         }
         
         if (foundTournament.getStatus().equals("WAITING")) {
-            event.reply("Tournament has not started yet.").queue();
+            event.getHook().editOriginal("Tournament has not started yet.").queue();
             return;
         }
         
@@ -367,12 +371,9 @@ public class TournamentBot extends ListenerAdapter {
         
         if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getGroups().isEmpty()) {
             StringBuilder groupsInfo = new StringBuilder();
-            int groupCount = 0;
             for (Map.Entry<String, List<Player>> entry : foundTournament.getGroups().entrySet()) {
-                groupCount++;
                 String groupName = entry.getKey();
                 List<Player> groupPlayers = entry.getValue();
-                
                 groupsInfo.append("**Group ").append(groupName).append(":** ");
                 List<String> names = new ArrayList<>();
                 for (Player p : groupPlayers) {
@@ -380,66 +381,48 @@ public class TournamentBot extends ListenerAdapter {
                 }
                 groupsInfo.append(String.join(", ", names)).append("\n");
                 
-                if (groupCount >= 4) {
-                    embed.addField("📋 Groups", groupsInfo.toString(), false);
-                    groupsInfo = new StringBuilder();
-                    groupCount = 0;
+                if (groupsInfo.length() > 500) {
+                    groupsInfo.append("... and more groups");
+                    break;
                 }
             }
-            if (groupsInfo.length() > 0) {
-                embed.addField("📋 Groups", groupsInfo.toString(), false);
-            }
+            embed.addField("📋 Groups", groupsInfo.toString(), false);
         }
         
         if (!foundTournament.getBrackets().isEmpty()) {
             StringBuilder matches = new StringBuilder();
-            int matchCount = 0;
-            int fieldCount = 0;
-            
+            int count = 0;
             for (Match m : foundTournament.getBrackets()) {
-                matchCount++;
+                if (count >= 8) {
+                    matches.append("... and ").append(foundTournament.getBrackets().size() - 8).append(" more matches");
+                    break;
+                }
                 matches.append(m.toString()).append("\n");
+                count++;
                 
-                if (matchCount >= 10) {
-                    fieldCount++;
-                    embed.addField("📋 Matches (" + fieldCount + ")", matches.toString(), false);
-                    matches = new StringBuilder();
-                    matchCount = 0;
+                if (matches.length() > 800) {
+                    matches.append("... and more matches");
+                    break;
                 }
             }
-            if (matches.length() > 0) {
-                fieldCount++;
-                embed.addField("📋 Matches (" + fieldCount + ")", matches.toString(), false);
-            }
+            embed.addField("📋 Matches", matches.toString(), false);
         }
         
         if (!foundTournament.getKnockoutMatches().isEmpty()) {
             StringBuilder knockout = new StringBuilder();
-            int matchCount = 0;
-            int fieldCount = 0;
-            
+            int count = 0;
             for (Match m : foundTournament.getKnockoutMatches()) {
-                matchCount++;
-                knockout.append(m.toString()).append("\n");
-                
-                if (matchCount >= 10) {
-                    fieldCount++;
-                    embed.addField("🏅 Knockout Matches (" + fieldCount + ")", knockout.toString(), false);
-                    knockout = new StringBuilder();
-                    matchCount = 0;
+                if (count >= 5) {
+                    knockout.append("... and more knockout matches");
+                    break;
                 }
+                knockout.append(m.toString()).append("\n");
+                count++;
             }
-            if (knockout.length() > 0) {
-                fieldCount++;
-                embed.addField("🏅 Knockout Matches (" + fieldCount + ")", knockout.toString(), false);
-            }
+            embed.addField("🏅 Knockout Matches", knockout.toString(), false);
         }
         
-        if (foundTournament.getWinnerId() != null && foundTournament.getStatus().equals("FINISHED")) {
-            embed.addField("🏆 CHAMPION", "<@" + foundTournament.getWinnerId() + "> 🎉", false);
-        }
-        
-        event.replyEmbeds(embed.build()).queue();
+        event.getHook().editOriginalEmbeds(embed.build()).queue();
     }
     
     private void showResults(SlashCommandInteractionEvent event, String guildId) {
@@ -447,7 +430,7 @@ public class TournamentBot extends ListenerAdapter {
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
         if (tournaments == null) {
-            event.reply("No tournaments in this server.").queue();
+            event.getHook().editOriginal("No tournaments in this server.").queue();
             return;
         }
         
@@ -460,7 +443,7 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (foundTournament == null) {
-            event.reply("You are not part of any tournament in this server.").queue();
+            event.getHook().editOriginal("You are not part of any tournament in this server.").queue();
             return;
         }
         
@@ -491,52 +474,18 @@ public class TournamentBot extends ListenerAdapter {
         StringBuilder ranking = new StringBuilder();
         int rank = 1;
         for (Player p : sortedPlayers) {
+            if (rank > 15) {
+                ranking.append("... and ").append(sortedPlayers.size() - 15).append(" more");
+                break;
+            }
             String pts = foundTournament.getTournamentType().equals("FOOTBALL") ? 
                         " - " + foundTournament.getPoints().getOrDefault(p.getUserId(), 0) + " pts" : 
                         " - " + p.getWins() + " wins";
             ranking.append(rank++).append(". <@").append(p.getUserId()).append(">").append(pts).append("\n");
-            if (rank > 20) {
-                ranking.append("... and ").append(sortedPlayers.size() - 20).append(" more");
-                break;
-            }
         }
         embed.addField("📊 Ranking", ranking.toString(), false);
         
-        if (!foundTournament.getBrackets().isEmpty()) {
-            StringBuilder finishedMatches = new StringBuilder();
-            int matchCount = 0;
-            for (Match m : foundTournament.getBrackets()) {
-                if (m.isFinished()) {
-                    matchCount++;
-                    finishedMatches.append(m.toString()).append("\n");
-                    if (matchCount >= 10) break;
-                }
-            }
-            if (matchCount > 0) {
-                embed.addField("✅ Finished Matches", finishedMatches.toString(), false);
-            }
-        }
-        
-        if (!foundTournament.getKnockoutMatches().isEmpty()) {
-            StringBuilder knockoutMatches = new StringBuilder();
-            int matchCount = 0;
-            for (Match m : foundTournament.getKnockoutMatches()) {
-                if (m.isFinished()) {
-                    matchCount++;
-                    knockoutMatches.append(m.toString()).append("\n");
-                    if (matchCount >= 10) break;
-                }
-            }
-            if (matchCount > 0) {
-                embed.addField("🏅 Knockout Matches", knockoutMatches.toString(), false);
-            }
-        }
-        
-        if (foundTournament.getWinnerId() != null && foundTournament.getStatus().equals("FINISHED")) {
-            embed.addField("🏆 CHAMPION", "<@" + foundTournament.getWinnerId() + "> 🎉", false);
-        }
-        
-        event.replyEmbeds(embed.build()).queue();
+        event.getHook().editOriginalEmbeds(embed.build()).queue();
     }
     
     private void showInfo(SlashCommandInteractionEvent event, String guildId) {
@@ -544,7 +493,7 @@ public class TournamentBot extends ListenerAdapter {
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
         if (tournaments == null) {
-            event.reply("No tournaments in this server.").queue();
+            event.getHook().editOriginal("No tournaments in this server.").queue();
             return;
         }
         
@@ -557,7 +506,7 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (foundTournament == null) {
-            event.reply("You are not part of any tournament in this server.").queue();
+            event.getHook().editOriginal("You are not part of any tournament in this server.").queue();
             return;
         }
         
@@ -580,59 +529,29 @@ public class TournamentBot extends ListenerAdapter {
         StringBuilder playersList = new StringBuilder();
         int i = 1;
         for (Player p : foundTournament.getPlayers().values()) {
-            String role = p.isAdmin() ? " 👑" : "";
-            playersList.append(i++).append(". <@").append(p.getUserId()).append(">").append(role).append("\n");
-            if (i > 20) {
-                playersList.append("... and ").append(foundTournament.getPlayers().size() - 20).append(" more");
+            if (i > 15) {
+                playersList.append("... and ").append(foundTournament.getPlayers().size() - 15).append(" more");
                 break;
             }
+            String role = p.isAdmin() ? " 👑" : "";
+            playersList.append(i++).append(". <@").append(p.getUserId()).append(">").append(role).append("\n");
         }
         embed.addField("👤 Players List", playersList.toString(), false);
-        
-        if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getGroups().isEmpty()) {
-            StringBuilder groupsInfo = new StringBuilder();
-            int groupCount = 0;
-            for (Map.Entry<String, List<Player>> entry : foundTournament.getGroups().entrySet()) {
-                groupCount++;
-                String groupName = entry.getKey();
-                List<Player> groupPlayers = entry.getValue();
-                
-                groupsInfo.append("**Group ").append(groupName).append(":** ");
-                List<String> names = new ArrayList<>();
-                for (Player p : groupPlayers) {
-                    names.add("<@" + p.getUserId() + ">");
-                }
-                groupsInfo.append(String.join(", ", names)).append("\n");
-                
-                if (groupCount >= 4) {
-                    embed.addField("📋 Groups", groupsInfo.toString(), false);
-                    groupsInfo = new StringBuilder();
-                    groupCount = 0;
-                }
-            }
-            if (groupsInfo.length() > 0) {
-                embed.addField("📋 Groups", groupsInfo.toString(), false);
-            }
-        }
         
         if (foundTournament.getTournamentType().equals("FOOTBALL") && !foundTournament.getPoints().isEmpty()) {
             StringBuilder pointsInfo = new StringBuilder();
             List<Map.Entry<String, Integer>> sortedPoints = new ArrayList<>(foundTournament.getPoints().entrySet());
             sortedPoints.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
-            int pointCount = 0;
+            int count = 0;
             for (Map.Entry<String, Integer> entry : sortedPoints) {
-                pointCount++;
+                if (count >= 15) break;
                 pointsInfo.append("<@").append(entry.getKey()).append("> - ").append(entry.getValue()).append(" pts\n");
-                if (pointCount >= 15) break;
+                count++;
             }
             embed.addField("📊 Points", pointsInfo.toString(), false);
         }
         
-        if (foundTournament.getWinnerId() != null && foundTournament.getStatus().equals("FINISHED")) {
-            embed.addField("🏆 CHAMPION", "<@" + foundTournament.getWinnerId() + "> 🎉", false);
-        }
-        
-        event.replyEmbeds(embed.build()).queue();
+        event.getHook().editOriginalEmbeds(embed.build()).queue();
     }
     
     private void leaveTournament(SlashCommandInteractionEvent event, String guildId) {
@@ -640,7 +559,7 @@ public class TournamentBot extends ListenerAdapter {
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
         if (tournaments == null) {
-            event.reply("No tournaments in this server.").queue();
+            event.getHook().editOriginal("No tournaments in this server.").queue();
             return;
         }
         
@@ -657,7 +576,7 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (foundTournament == null) {
-            event.reply("You are not part of any tournament in this server.").queue();
+            event.getHook().editOriginal("You are not part of any tournament in this server.").queue();
             return;
         }
         
@@ -665,7 +584,7 @@ public class TournamentBot extends ListenerAdapter {
         removeRoleFromPlayer(guildId, userId, foundTournament.getGame());
         DatabaseManager.saveTournament(guildId, tournamentId, foundTournament);
         
-        event.reply("✅ You left the tournament: " + foundTournament.getName()).queue();
+        event.getHook().editOriginal("✅ You left the tournament: " + foundTournament.getName()).queue();
     }
     
     private void addPlayer(SlashCommandInteractionEvent event, String guildId) {
@@ -673,7 +592,7 @@ public class TournamentBot extends ListenerAdapter {
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
         if (tournaments == null) {
-            event.reply("No tournaments in this server.").queue();
+            event.getHook().editOriginal("No tournaments in this server.").queue();
             return;
         }
         
@@ -690,7 +609,7 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (adminTournament == null) {
-            event.reply("You don't have permission to use this command!\nThis command is only for Tournament Administrators.").queue();
+            event.getHook().editOriginal("You don't have permission to use this command!\nThis command is only for Tournament Administrators.").queue();
             return;
         }
         
@@ -698,19 +617,19 @@ public class TournamentBot extends ListenerAdapter {
         String targetName = event.getOption("user").getAsUser().getName();
         
         if (adminTournament.getPlayers().containsKey(targetUserId)) {
-            event.reply(targetName + " is already in the tournament!").queue();
+            event.getHook().editOriginal(targetName + " is already in the tournament!").queue();
             return;
         }
         
         if (adminTournament.getPlayers().size() >= adminTournament.getMaxPlayers()) {
-            event.reply("Tournament is full! (" + adminTournament.getMaxPlayers() + "/" + adminTournament.getMaxPlayers() + ")").queue();
+            event.getHook().editOriginal("Tournament is full! (" + adminTournament.getMaxPlayers() + "/" + adminTournament.getMaxPlayers() + ")").queue();
             return;
         }
         
         adminTournament.addPlayer(targetUserId, targetName);
         DatabaseManager.saveTournament(guildId, tournamentId, adminTournament);
         
-        event.reply(targetName + " was added to " + adminTournament.getName() + 
+        event.getHook().editOriginal(targetName + " was added to " + adminTournament.getName() + 
                    "\nAdded by: <@" + userId + ">\nPlayers: " + 
                    adminTournament.getPlayers().size() + "/" + adminTournament.getMaxPlayers()).queue();
     }
@@ -720,7 +639,7 @@ public class TournamentBot extends ListenerAdapter {
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
         if (tournaments == null) {
-            event.reply("No tournaments in this server.").queue();
+            event.getHook().editOriginal("No tournaments in this server.").queue();
             return;
         }
         
@@ -737,7 +656,7 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (adminTournament == null) {
-            event.reply("You don't have permission to use this command!\nThis command is only for Tournament Administrators.").queue();
+            event.getHook().editOriginal("You don't have permission to use this command!\nThis command is only for Tournament Administrators.").queue();
             return;
         }
         
@@ -746,14 +665,14 @@ public class TournamentBot extends ListenerAdapter {
         int score2 = event.getOption("score2").getAsInt();
         
         if (score1 < 0 || score2 < 0) {
-            event.reply("Scores cannot be negative!").queue();
+            event.getHook().editOriginal("Scores cannot be negative!").queue();
             return;
         }
         
         boolean found = adminTournament.setMatchScore(matchId, score1, score2);
         if (found) {
             DatabaseManager.saveTournament(guildId, tournamentId, adminTournament);
-            event.reply("Score updated!\n\nTournament: " + adminTournament.getName() + 
+            event.getHook().editOriginal("Score updated!\n\nTournament: " + adminTournament.getName() + 
                        "\nMatch " + matchId + ": " + score1 + " - " + score2 + 
                        "\nSet by: <@" + userId + ">").queue();
             
@@ -761,7 +680,7 @@ public class TournamentBot extends ListenerAdapter {
                 giveChampionRole(guildId, adminTournament.getWinnerId(), adminTournament.getGame());
             }
         } else {
-            event.reply("Match with ID " + matchId + " not found.").queue();
+            event.getHook().editOriginal("Match with ID " + matchId + " not found.").queue();
         }
     }
     
@@ -769,7 +688,7 @@ public class TournamentBot extends ListenerAdapter {
         Member member = event.getMember();
         
         if (member == null || !member.hasPermission(Permission.ADMINISTRATOR)) {
-            event.reply("You don't have permission to use this command!\nThis command is only for Server Administrators.").queue();
+            event.getHook().editOriginal("You don't have permission to use this command!\nThis command is only for Server Administrators.").queue();
             return;
         }
         
@@ -777,7 +696,7 @@ public class TournamentBot extends ListenerAdapter {
         Map<String, Tournament> tournaments = serverTournaments.get(guildId);
         
         if (tournaments == null) {
-            event.reply("No tournaments in this server.").queue();
+            event.getHook().editOriginal("No tournaments in this server.").queue();
             return;
         }
         
@@ -794,15 +713,17 @@ public class TournamentBot extends ListenerAdapter {
         }
         
         if (tournamentId == null) {
-            event.reply("You are not an admin of any tournament in this server.").queue();
+            event.getHook().editOriginal("You are not an admin of any tournament in this server.").queue();
             return;
         }
         
         tournaments.remove(tournamentId);
         DatabaseManager.deleteTournament(guildId, tournamentId);
         
-        event.reply("Tournament deleted!\n\nName: " + tournamentName + "\nDeleted by: <@" + userId + ">").queue();
+        event.getHook().editOriginal("Tournament deleted!\n\nName: " + tournamentName + "\nDeleted by: <@" + userId + ">").queue();
     }
+    
+    // ==================== METODAT PËR HANDLE USER INPUT ====================
     
     public static void handleUserInput(String guildId, String channelId, String userId, String message) {
         String key = guildId + ":" + channelId;

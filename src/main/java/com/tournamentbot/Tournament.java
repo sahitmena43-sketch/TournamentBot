@@ -99,17 +99,7 @@ public class Tournament {
         Collections.shuffle(playerList);
         
         int total = playerList.size();
-        
-        int numGroups;
-        if (total <= 4) {
-            numGroups = 1;
-        } else if (total <= 8) {
-            numGroups = 2;
-        } else if (total <= 12) {
-            numGroups = 3;
-        } else {
-            numGroups = 4;
-        }
+        int numGroups = Math.min(4, Math.max(2, total / 2));
         
         while (total / numGroups < 2 && numGroups > 1) {
             numGroups--;
@@ -118,7 +108,7 @@ public class Tournament {
         int base = total / numGroups;
         int extra = total % numGroups;
         
-        String[] groupNames = {"A", "B", "C", "D", "E", "F"};
+        String[] groupNames = {"A", "B", "C", "D"};
         int index = 0;
         
         for (int g = 0; g < numGroups && index < total; g++) {
@@ -258,7 +248,6 @@ public class Tournament {
         }
         
         int numPlayers = sortedPlayers.size();
-        
         int nextPowerOfTwo = 1;
         while (nextPowerOfTwo < numPlayers) {
             nextPowerOfTwo *= 2;
@@ -412,8 +401,14 @@ public class Tournament {
         if (!brackets.isEmpty()) {
             String sectionName = tournamentType.equals("FOOTBALL") ? "**📋 Group Matches:**\n\n" : "**📋 Matches:**\n\n";
             sb.append(sectionName);
+            int count = 0;
             for (Match m : brackets) {
+                if (count >= 10) {
+                    sb.append("... and ").append(brackets.size() - 10).append(" more matches\n");
+                    break;
+                }
                 sb.append(m.toString()).append("\n");
+                count++;
             }
         }
         
@@ -428,8 +423,14 @@ public class Tournament {
                 default: stageName = "🏅 Knockout Stage";
             }
             sb.append("\n**").append(stageName).append("**\n\n");
+            int count = 0;
             for (Match m : knockoutMatches) {
+                if (count >= 5) {
+                    sb.append("... and more knockout matches\n");
+                    break;
+                }
                 sb.append(m.toString()).append("\n");
+                count++;
             }
         }
         
@@ -491,6 +492,10 @@ public class Tournament {
         sb.append("\n**👤 Players:**\n");
         int i = 1;
         for (Player p : players.values()) {
+            if (i > 15) {
+                sb.append("... and ").append(players.size() - 15).append(" more");
+                break;
+            }
             sb.append(i++).append(". <@").append(p.getUserId()).append(">");
             if (p.isAdmin()) sb.append(" (Admin)");
             if (tournamentType.equals("FOOTBALL")) {

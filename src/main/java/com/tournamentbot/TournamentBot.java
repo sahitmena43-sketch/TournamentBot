@@ -146,7 +146,7 @@ public class TournamentBot extends ListenerAdapter {
         String command = event.getName();
         String guildId = event.getGuild().getId();
         
-        // ✅ Përgjigju menjëherë për të shmangur timeout
+        // ✅ Përgjigju menjëherë për të gjitha komandat
         event.deferReply().queue();
         
         switch (command) {
